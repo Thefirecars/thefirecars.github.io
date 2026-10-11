@@ -778,5 +778,173 @@ data-color="rgba(93,64,55,255)">
 </script>
 
 <!-- END FARMSIE PICTURE MENU -->
+<!-- FARMSIE CATEGORY AND BOOK LIBRARY -->
+
+<script>
+(function() {
+
+    const menu = document.getElementById('farmsie-menu');
+    const grid = document.getElementById('farmsie-picture-grid');
+    const heading = menu.querySelector('h2');
+    const description = menu.querySelector('p');
+
+    // Replace the old back button so its previous
+    // click handler does not interfere with navigation.
+    const oldBack = document.getElementById('farmsie-back-btn');
+    const back = oldBack.cloneNode(true);
+    oldBack.replaceWith(back);
+
+    // Categories available now or planned for later.
+    const categories = [
+        { id: 'faith', name: '✝️ Faith & Farm' },
+        { id: 'animals', name: '🐮 Farm Animals' },
+        { id: 'nature', name: '🌻 Nature & Gardens' }
+    ];
+
+    // Our first real coloring book.
+    const books = [
+        {
+            title: 'My First Farmsie Coloring Book',
+            category: 'faith',
+            pages: [1, 2, 3, 4]
+        }
+    ];
+
+    function prepareScreen(title, message, backText, backAction) {
+        heading.textContent = title;
+        description.textContent = message;
+        grid.innerHTML = '';
+
+        back.textContent = backText;
+        back.onclick = backAction;
+    }
+
+    function createCard(title, subtitle, image, action) {
+
+        const card = document.createElement('button');
+        card.type = 'button';
+        card.className = 'farmsie-picture-card';
+
+        if (image) {
+            const picture = document.createElement('img');
+            picture.src = image;
+            picture.alt = title;
+            card.appendChild(picture);
+        }
+
+        const name = document.createElement('span');
+        name.textContent = title;
+        card.appendChild(name);
+
+        const info = document.createElement('span');
+        info.textContent = subtitle;
+        card.appendChild(info);
+
+        if (action) {
+            card.addEventListener('click', action);
+        } else {
+            card.disabled = true;
+            card.style.opacity = '0.5';
+        }
+
+        grid.appendChild(card);
+    }
+
+    // SCREEN 1: CATEGORIES
+    function showCategories() {
+
+        prepareScreen(
+            '🌻 Farmsie Coloring Shop',
+            'Choose your favorite category!',
+            '← Continue Coloring',
+            () => { menu.hidden = true; }
+        );
+
+        categories.forEach(category => {
+
+            const availableBooks = books.filter(
+                book => book.category === category.id
+            );
+
+            createCard(
+                category.name,
+                availableBooks.length ? 'Open Collection' : 'Coming Soon',
+                availableBooks.length
+                    ? pageImages[availableBooks[0].pages[0]]
+                    : null,
+                availableBooks.length
+                    ? () => showBooks(category)
+                    : null
+            );
+
+        });
+    }
+
+    // SCREEN 2: BOOKS
+    function showBooks(category) {
+
+        prepareScreen(
+            category.name,
+            'Choose a coloring book!',
+            '← Back to Categories',
+            showCategories
+        );
+
+        books.filter(
+            book => book.category === category.id
+        ).forEach(book => {
+
+            createCard(
+                book.title,
+                book.pages.length + ' Free Pictures',
+                pageImages[book.pages[0]],
+                () => showPictures(book)
+            );
+
+        });
+    }
+
+    // SCREEN 3: PICTURES
+    function showPictures(book) {
+
+        prepareScreen(
+            book.title,
+            'Choose a picture to color!',
+            '← Back to Books',
+            () => {
+                const category = categories.find(
+                    item => item.id === book.category
+                );
+                showBooks(category);
+            }
+        );
+
+        book.pages.forEach(pageNumber => {
+
+            createCard(
+                'Picture ' + pageNumber,
+                '🎨 Start Coloring',
+                pageImages[pageNumber],
+                () => {
+
+                    currentPage = pageNumber;
+
+                    loadBookPage(pageNumber);
+
+                    menu.hidden = true;
+
+                }
+            );
+
+        });
+    }
+
+    // Begin at the category selection screen.
+    showCategories();
+
+})();
+</script>
+
+<!-- END FARMSIE BOOK LIBRARY -->
 </body>
 </html>
