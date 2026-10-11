@@ -617,6 +617,166 @@ data-color="rgba(93,64,55,255)">
   renderView();
 })();
 </script>
-    
+    <!-- FARMSIE PICTURE SELECTION MENU -->
+
+<style>
+#farmsie-menu {
+    position: fixed;
+    inset: 0;
+    background: #F7F9FC;
+    z-index: 200;
+    overflow-y: auto;
+    padding: 25px 15px;
+    box-sizing: border-box;
+    text-align: center;
+}
+
+#farmsie-menu[hidden] {
+    display: none;
+}
+
+#farmsie-menu h2 {
+    color: #2ECC71;
+    font-size: 26px;
+}
+
+#farmsie-menu p {
+    color: #555;
+    font-size: 16px;
+}
+
+#farmsie-picture-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 15px;
+    max-width: 550px;
+    margin: 25px auto;
+}
+
+.farmsie-picture-card {
+    background: white;
+    border: 2px solid #ddd;
+    border-radius: 15px;
+    padding: 8px;
+    cursor: pointer;
+    overflow: hidden;
+}
+
+.farmsie-picture-card img {
+    width: 100%;
+    aspect-ratio: 1;
+    object-fit: contain;
+    display: block;
+}
+
+.farmsie-picture-card span {
+    display: block;
+    margin-top: 8px;
+    font-weight: bold;
+    color: #333;
+}
+
+.farmsie-free {
+    color: #2ECC71 !important;
+}
+
+#farmsie-back-btn {
+    background: #0088CC;
+    color: white;
+    border: none;
+    padding: 12px 20px;
+    border-radius: 20px;
+    font-weight: bold;
+}
+</style>
+
+<div id="farmsie-menu">
+
+    <h2>🌻 Farmsie Coloring Shop</h2>
+
+    <p>Choose your favorite picture to color!</p>
+
+    <div id="farmsie-picture-grid"></div>
+
+    <button id="farmsie-back-btn" type="button">
+        ← Continue Coloring
+    </button>
+
+</div>
+
+<script>
+(function() {
+
+    const menu = document.getElementById('farmsie-menu');
+
+    const grid = document.getElementById('farmsie-picture-grid');
+
+    for (let number = 1; number <= totalPages; number++) {
+
+        const card = document.createElement('button');
+
+        card.type = 'button';
+        card.className = 'farmsie-picture-card';
+
+        const picture = document.createElement('img');
+
+        picture.src = pageImages[number];
+        picture.alt = 'Coloring Picture ' + number;
+
+        const title = document.createElement('span');
+        title.textContent = 'Picture ' + number;
+
+        const free = document.createElement('span');
+        free.className = 'farmsie-free';
+        free.textContent = 'FREE';
+
+        card.appendChild(picture);
+        card.appendChild(title);
+        card.appendChild(free);
+
+        card.addEventListener('click', function() {
+
+            currentPage = number;
+
+            loadBookPage(number);
+
+            menu.hidden = true;
+
+        });
+
+        grid.appendChild(card);
+    }
+
+    const header = document.querySelector('header');
+
+    // Keep old navigation code, but hide its buttons.
+    header.querySelectorAll('.nav-btn').forEach(function(btn) {
+        btn.hidden = true;
+    });
+
+    const menuButton = document.createElement('button');
+
+    menuButton.type = 'button';
+    menuButton.className = 'nav-btn';
+
+    menuButton.textContent = '📚 Pictures';
+
+    menuButton.addEventListener('click', function() {
+        menu.hidden = false;
+    });
+
+    header.insertBefore(menuButton, header.firstElementChild);
+
+    document.getElementById('farmsie-back-btn')
+        .addEventListener('click', function() {
+
+            menu.hidden = true;
+
+        });
+
+})();
+</script>
+
+<!-- END FARMSIE PICTURE MENU -->
 </body>
 </html>
