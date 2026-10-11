@@ -1706,5 +1706,35 @@ data-color="rgba(93,64,55,255)">
 </script>
 
 <!-- END FARMSIE PHOTO PAINTING ZOOM -->
+<!-- FARMSIE DRAW MODE FIX -->
+
+<script>
+(() => {
+
+  const drawButton =
+    document.getElementById("photo-draw");
+
+  const brushButton =
+    document.getElementById("farmsie-paint-brush");
+
+  const eraserButton =
+    document.getElementById("farmsie-paint-eraser");
+
+  if (!drawButton || !brushButton || !eraserButton) {
+    return;
+  }
+
+  brushButton.addEventListener("click", () => {
+    drawButton.click();
+  });
+
+  eraserButton.addEventListener("click", () => {
+    drawButton.click();
+  });
+
+})();
+</script>
+
+<!-- END FARMSIE DRAW MODE FIX -->
 </body>
 </html>
