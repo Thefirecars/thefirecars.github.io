@@ -1283,8 +1283,8 @@ data-color="rgba(93,64,55,255)">
     paint.strokeStyle = color.value;
 
     paint.lineWidth =
-      Number(size.value) *
-      SIZE / stage.clientWidth;
+  Number(size.value) *
+  SIZE / stage.getBoundingClientRect().width;
 
     paint.lineCap = "round";
     paint.lineJoin = "round";
