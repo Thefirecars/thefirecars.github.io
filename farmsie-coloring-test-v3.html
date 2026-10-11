@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Farmsie Coloring Shop - Test V3</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        body { margin: 0; padding: 0; background: #F7F9FC; font-family: system-ui, -apple-system, sans-serif; text-align: center; overflow: hidden; -webkit-user-select: none; user-select: none; }
+        header { background: #FFFFFF; padding: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: center; }
+        h1 { font-size: 18px; margin: 0; color: #333; }
+        .nav-btn { background: #0088CC; color: white; border: none; padding: 6px 12px; border-radius: 15px; font-weight: bold; cursor: pointer; }
+        #canvas-container { position: relative; width: 92vw; height: 92vw; max-width: 450px; max-height: 450px; margin: 15px auto; border-radius: 16px; background: #ffffff; box-shadow: 0 8px 24px rgba(0,0,0,0.08); overflow: hidden; }
+        canvas { width: 100%; height: 100%; display: block; }
+        #palette-container { width: 100%; overflow-x: auto; white-space: nowrap; padding: 10px 0; background: #fff; position: fixed; bottom: 70px; box-shadow: 0 -2px 10px rgba(0,0,0,0.02); }
+        .palette-inner { display: inline-flex; gap: 12px; padding: 0 15px; }
+        .color-btn { width: 44px; height: 44px; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 3px 6px rgba(0,0,0,0.15); cursor: pointer; flex-shrink: 0; transition: transform 0.15s; }
+        .color-btn.active { transform: scale(1.2); border-color: #333; }
+        footer { position: fixed; bottom: 0; width: 100%; height: 60px; padding: 0 10px; box-sizing: border-box; background: #FFF; display: flex; justify-content: center; align-items: center; gap: 8px; box-shadow: 0 -2px 10px rgba(0,0,0,0.05); }
+        .action-btn { background: #2ECC71; color: white; border: none; padding: 10px 8px; font-size: 13px; font-weight: bold; border-radius: 20px; cursor: pointer; box-shadow: 0 4px 12px rgba(46,204,113,0.3); min-width: 0; flex: 1; }
+        #save-picture-btn { background: #0088CC; box-shadow: 0 4px 12px rgba(0,136,204,0.24); }
+    </style>
+</head>
+<body>
+    <header>
+        <button class="nav-btn" onclick="changePage(-1)">◀ Prev</button>
+        <h1 id="page-title">Page 1 of 4</h1>
+        <button class="nav-btn" onclick="changePage(1)">Next ▶</button>
+    </header>
+
+    <div id="canvas-container">
+        <canvas id="coloring-canvas"></canvas>
+    </div>
+
+    <div id="palette-container">
+        <div class="palette-inner">
+            <button class="color-btn active" style="background: #FF3B30;" data-color="rgba(255,59,48,255)"></button>
+            <button class="color-btn" style="background: #FF9500;" data-color="rgba(255,149,0,255)"></button>
+            <button class="color-btn" style="background: #FFCC00;" data-color="rgba(255,204,0,255)"></button>
+            <button class="color-btn" style="background: #4CD964;" data-color="rgba(76,217,100,255)"></button>
+            <button class="color-btn" style="background: #5AC8FA;" data-color="rgba(90,200,250,255)"></button>
+            <button class="color-btn" style="background: #007AFF;" data-color="rgba(0,122,255,255)"></button>
+            <button class="color-btn" style="background: #5856D6;" data-color="rgba(88,86,214,255)"></button>
+            <button class="color-btn" style="background: #8D6E63;" data-color="rgba(141,110,99,255)"></button>
+        </div>
+    </div>
+
+    <footer>
+        <button class="action-btn" id="save-picture-btn">Save Picture ⬇</button>
+        <button class="action-btn" id="buy-premium-btn">Get More Books! ✨</button>
+    </footer>
+
+    <script>
+        const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+        if (tg) {
+            tg.ready();
+            tg.expand();
+        }
+
+        const canvas = document.getElementById('coloring-canvas');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+        let currentPage = 1;
+        const totalPages = 4;
+        const pageImages = {
+            1: 'page1.png.png',
+            2: 'page2.png.png',
+            3: 'page3.png.png',
+            4: 'page4.png.png'
+        };
+
+        let selectedColor = [255, 59, 48, 255];
+        const baseImage = new Image();
+        let boundaryMask = null;
+        let maskWidth = 0;
+        let maskHeight = 0;
+
+        function buildBoundaryMask() {
+            const offscreen = document.createElement('canvas');
+            offscreen.width = baseImage.width;
+            offscreen.height = baseImage.height;
+            const offCtx = offscreen.getContext('2d', { willReadFrequently: true });
+            offCtx.drawImage(baseImage, 0, 0);
+
+            const imgData = offCtx.getImageData(0, 0, offscreen.width, offscreen.height);
+            const data = imgData.data;
+            const width = imgData.width;
+            const height = imgData.height;
+            const initialMask = new Uint8Array(width * height);
+
+            // Detect dark outline pixels from the original line art.
+            for (let i = 0; i < width * height; i++) {
+                const idx = i * 4;
+                const r = data[idx];
+                const g = data[idx + 1];
+                const b = data[idx + 2];
+                const alpha = data[idx + 3];
+                const brightness = (r + g + b) / 3;
+
+                // Treat darker/gray anti-aliased pixels as boundaries too.
+                if (alpha > 0 && brightness < 220) {
+                    initialMask[i] = 1;
+                }
+            }
+
+            // Expand boundary 1 pixel in every direction to seal tiny gaps.
+            const expandedMask = new Uint8Array(initialMask);
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    const pos = y * width + x;
+                    if (initialMask[pos] === 1) {
+                        for (let dy = -1; dy <= 1; dy++) {
+                            for (let dx = -1; dx <= 1; dx++) {
+                                const nx = x + dx;
+                                const ny = y + dy;
+                                if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+                                    expandedMask[ny * width + nx] = 1;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            boundaryMask = expandedMask;
+            maskWidth = width;
+            maskHeight = height;
+        }
+
+        function loadBookPage(num) {
+            document.getElementById('page-title').innerText = `Page ${num} of ${totalPages}`;
+            baseImage.src = pageImages[num];
+            baseImage.onload = () => {
+                canvas.width = baseImage.width;
+                canvas.height = baseImage.height;
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(baseImage, 0, 0);
+                buildBoundaryMask();
+            };
+        }
+
+        document.querySelectorAll('.color-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const active = document.querySelector('.color-btn.active');
+                if (active) active.classList.remove('active');
+                e.target.classList.add('active');
+                selectedColor = e.target.getAttribute('data-color').match(/\d+/g).map(Number);
+            });
+        });
+
+        function changePage(direction) {
+            currentPage += direction;
+            if (currentPage < 1) currentPage = totalPages;
+            if (currentPage > totalPages) currentPage = 1;
+            loadBookPage(currentPage);
+        }
+
+        function fillRegion(startX, startY, fillColor) {
+            if (!boundaryMask || startX < 0 || startX >= maskWidth || startY < 0 || startY >= maskHeight) return;
+
+            const startPos = startY * maskWidth + startX;
+            if (boundaryMask[startPos] === 1) return; // Don't color black outlines.
+
+            const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imgData.data;
+            const startIdx = startPos * 4;
+
+            // If already this exact fill color, do nothing.
+            if (
+                data[startIdx] === fillColor[0] &&
+                data[startIdx + 1] === fillColor[1] &&
+                data[startIdx + 2] === fillColor[2] &&
+                data[startIdx + 3] === fillColor[3]
+            ) {
+                return;
+            }
+
+            const visited = new Uint8Array(maskWidth * maskHeight);
+            const stack = [startPos];
+            visited[startPos] = 1;
+
+            while (stack.length > 0) {
+                const pos = stack.pop();
+                const x = pos % maskWidth;
+                const y = (pos / maskWidth) | 0;
+                const idx = pos * 4;
+
+                // Only color non-boundary pixels.
+                if (boundaryMask[pos] === 0) {
+                    data[idx] = fillColor[0];
+                    data[idx + 1] = fillColor[1];
+                    data[idx + 2] = fillColor[2];
+                    data[idx + 3] = fillColor[3];
+
+                    const neighbors = [
+                        pos - 1,
+                        pos + 1,
+                        pos - maskWidth,
+                        pos + maskWidth
+                    ];
+
+                    for (const n of neighbors) {
+                        if (n < 0 || n >= visited.length || visited[n] === 1 || boundaryMask[n] === 1) continue;
+
+                        // Extra left/right edge protection.
+                        if ((n === pos - 1 && x === 0) || (n === pos + 1 && x === maskWidth - 1)) continue;
+
+                        visited[n] = 1;
+                        stack.push(n);
+                    }
+                }
+            }
+
+            ctx.putImageData(imgData, 0, 0);
+        }
+
+        canvas.addEventListener('click', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const startX = Math.floor((e.clientX - rect.left) * (canvas.width / rect.width));
+            const startY = Math.floor((e.clientY - rect.top) * (canvas.height / rect.height));
+            fillRegion(startX, startY, selectedColor);
+        });
+
+        // Export only the current coloring page, not the surrounding app interface.
+        document.getElementById('save-picture-btn').addEventListener('click', () => {
+            if (!canvas.width || !canvas.height || !boundaryMask) {
+                alert('The coloring page is still loading. Please try again.');
+                return;
+            }
+
+            canvas.toBlob((blob) => {
+                if (!blob) {
+                    alert('Could not create the picture. Please try again.');
+                    return;
+                }
+
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `Farmsie-Page-${currentPage}.png`;
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                // Keep the blob alive long enough for mobile browsers to begin downloading.
+                setTimeout(() => URL.revokeObjectURL(url), 60000);
+            }, 'image/png');
+        });
+
+        document.getElementById('buy-premium-btn').addEventListener('click', () => {
+            if (tg) {
+                tg.openLink('https://gumroad.com');
+            } else {
+                window.open('https://gumroad.com', '_blank');
+            }
+        });
+
+        loadBookPage(currentPage);
+    </script>
+</body>
+</html>
