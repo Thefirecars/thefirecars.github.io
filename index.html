@@ -349,5 +349,246 @@
 
         loadBookPage(currentPage);
     </script>
+<!-- FARMSIE STEP 6: Paste this whole block AFTER the existing </script> and BEFORE </body> -->
+<style>
+  #farmsie-tools {
+    position: fixed; left: 0; right: 0; bottom: 146px; z-index: 20;
+    display: flex; gap: 5px; padding: 7px; overflow-x: auto;
+    background: #fff; box-shadow: 0 1px 8px #0002;
+    box-sizing: border-box; scrollbar-width: thin;
+  }
+  #farmsie-tools button { flex: 0 0 auto; border: 0; border-radius: 9px;
+    background: #e8f1f7; color: #123; padding: 8px 9px;
+    font-size: 13px; font-weight: 650; min-height: 38px; }
+  #farmsie-tools button.active { background: #0088cc; color: #fff; }
+  #farmsie-tools label { flex: 0 0 auto; display: flex; gap: 5px;
+    align-items: center; font-size: 12px; color: #333; }
+  #farmsie-tools input { width: 66px; }
+  #coloring-canvas { touch-action: none; }
+</style>
+<script>
+(() => {
+  // Requires the working Step 5 Farmsie index.html, including IndexedDB autosave.
+  const stage = document.getElementById('canvas-container');
+  const art = document.getElementById('coloring-canvas');
+  const tools = document.createElement('div');
+  tools.id = 'farmsie-tools';
+  tools.setAttribute('role', 'toolbar');
+  tools.setAttribute('aria-label', 'Farmsie coloring tools');
+  tools.innerHTML = `
+    <button type="button" data-tool="fill" class="active">🪣 Fill</button>
+    <button type="button" data-tool="brush">🖌 Brush</button>
+    <button type="button" data-tool="erase">🧽 Eraser</button>
+    <button type="button" data-tool="move">✋ Move</button>
+    <label>Size <input id="farmsie-brush-size" type="range" min="3" max="40" value="16"></label>
+    <label>🎨 <input id="farmsie-custom-color" aria-label="Choose a custom color" type="color" value="#ff3b30"></label>
+    <button type="button" id="farmsie-undo">↶ Undo</button>
+    <button type="button" id="farmsie-redo">↷ Redo</button>
+    <button type="button" id="farmsie-reset">⟲ Reset</button>
+    <button type="button" id="farmsie-zoomout">−</button>
+    <button type="button" id="farmsie-zoom-label">100%</button>
+    <button type="button" id="farmsie-zoomin">+</button>`;
+  document.getElementById('palette-container').before(tools);
+
+  let mode = 'fill';
+  let zoom = 1, panX = 0, panY = 0;
+  let undo = [], redo = [];
+  let originalPixels = null;
+  const touches = new Map();
+  let gesture = null, pinch = null;
+
+  const maxSteps = () => Math.max(1, Math.min(6,
+    Math.floor(36 * 1024 * 1024 / Math.max(1, art.width * art.height * 4))));
+  const snapshot = () => ctx.getImageData(0, 0, art.width, art.height);
+  function beginChange() {
+    undo.push(snapshot());
+    if (undo.length > maxSteps()) undo.shift();
+    redo = [];
+  }
+  function restore(state) {
+    if (!state || state.width !== art.width || state.height !== art.height) return;
+    ctx.putImageData(state, 0, 0);
+    autoSaveCurrentPage();
+  }
+  tools.querySelector('#farmsie-undo').onclick = () => {
+    if (!pageReady || !undo.length) return;
+    redo.push(snapshot());
+    restore(undo.pop());
+  };
+  tools.querySelector('#farmsie-redo').onclick = () => {
+    if (!pageReady || !redo.length) return;
+    undo.push(snapshot());
+    restore(redo.pop());
+  };
+  tools.querySelector('#farmsie-reset').onclick = () => {
+    if (!pageReady || !confirm('Erase all colors on this page? Other pages stay saved.')) return;
+    beginChange();
+    ctx.clearRect(0, 0, art.width, art.height);
+    ctx.drawImage(baseImage, 0, 0);
+    autoSaveCurrentPage();
+  };
+  tools.querySelector('#farmsie-custom-color').addEventListener('input', e => {
+    const hex = e.target.value;
+    selectedColor = [1, 3, 5].map(i => parseInt(hex.slice(i, i+2), 16)).concat(255);
+    document.querySelector('.color-btn.active')?.classList.remove('active');
+  });
+  tools.querySelectorAll('[data-tool]').forEach(button => {
+    button.onclick = () => {
+      mode = button.dataset.tool;
+      tools.querySelectorAll('[data-tool]').forEach(b => b.classList.toggle('active', b === button));
+    };
+  });
+
+  function limitPan() {
+    panX = Math.max(stage.clientWidth * (1 - zoom), Math.min(0, panX));
+    panY = Math.max(stage.clientHeight * (1 - zoom), Math.min(0, panY));
+  }
+  function renderView() {
+    limitPan();
+    art.style.transformOrigin = '0 0';
+    art.style.transform = `translate(${panX}px, ${panY}px) scale(${zoom})`;
+    tools.querySelector('#farmsie-zoom-label').textContent = `${Math.round(zoom * 100)}%`;
+  }
+  function setZoom(next, focusX = stage.clientWidth / 2, focusY = stage.clientHeight / 2) {
+    const z = Math.min(5, Math.max(1, next));
+    panX = focusX - ((focusX - panX) / zoom) * z;
+    panY = focusY - ((focusY - panY) / zoom) * z;
+    zoom = z;
+    renderView();
+  }
+  tools.querySelector('#farmsie-zoomin').onclick = () => setZoom(zoom * 1.5);
+  tools.querySelector('#farmsie-zoomout').onclick = () => setZoom(zoom / 1.5);
+  tools.querySelector('#farmsie-zoom-label').onclick = () => {
+    zoom = 1; panX = 0; panY = 0; renderView();
+  };
+
+  function point(e) {
+    const r = art.getBoundingClientRect();
+    return { x: (e.clientX - r.left) * art.width / r.width,
+             y: (e.clientY - r.top) * art.height / r.height };
+  }
+  function local(e) {
+    const r = stage.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  }
+  function valid(p) { return p.x >= 0 && p.y >= 0 && p.x < art.width && p.y < art.height; }
+
+  // Brush and eraser draw continuously as the user slides a finger or stylus.
+  // Black outlines are never overwritten, and eraser restores the original art.
+  function stroke(from, to) {
+    if (!pageReady || !boundaryMask || !originalPixels) return;
+    const image = ctx.getImageData(0, 0, art.width, art.height);
+    const d = image.data, o = originalPixels.data;
+    const radius = Math.max(1, Number(tools.querySelector('#farmsie-brush-size').value)
+      * art.width / stage.clientWidth / 2);
+    const length = Math.hypot(to.x - from.x, to.y - from.y);
+    const count = Math.max(1, Math.ceil(length / Math.max(1, radius / 2)));
+    for (let j = 0; j <= count; j++) {
+      const cx = from.x + (to.x - from.x) * j / count;
+      const cy = from.y + (to.y - from.y) * j / count;
+      for (let y = Math.max(0, Math.floor(cy - radius)); y <= Math.min(art.height-1, Math.ceil(cy+radius)); y++) {
+        for (let x = Math.max(0, Math.floor(cx - radius)); x <= Math.min(art.width-1, Math.ceil(cx+radius)); x++) {
+          if ((x-cx)**2 + (y-cy)**2 > radius*radius) continue;
+          const n = y * art.width + x;
+          if (boundaryMask[n]) continue;
+          const k = n * 4;
+          if (mode === 'erase') {
+            d[k] = o[k]; d[k+1] = o[k+1];
+            d[k+2] = o[k+2]; d[k+3] = o[k+3];
+          } else {
+            d[k] = selectedColor[0]; d[k+1] = selectedColor[1];
+            d[k+2] = selectedColor[2]; d[k+3] = 255;
+          }
+        }
+      }
+    }
+    ctx.putImageData(image, 0, 0);
+  }
+
+  function enterPinch() {
+    if (touches.size < 2) return;
+    if (gesture?.changed) autoSaveCurrentPage();
+    gesture = null; // Pinching should not paint the picture.
+    const p = [...touches.values()].slice(0, 2);
+    pinch = { distance: Math.hypot(p[0].x-p[1].x, p[0].y-p[1].y),
+      zoom, panX, panY, center: {x:(p[0].x+p[1].x)/2, y:(p[0].y+p[1].y)/2} };
+  }
+  art.addEventListener('pointerdown', e => {
+    if (!pageReady) return;
+    e.preventDefault();
+    art.setPointerCapture(e.pointerId);
+    touches.set(e.pointerId, local(e));
+    if (touches.size >= 2) { enterPinch(); return; }
+    gesture = {p: point(e), local: local(e), start: local(e), moved: false, changed: false};
+  });
+  art.addEventListener('pointermove', e => {
+    if (!touches.has(e.pointerId)) return;
+    e.preventDefault();
+    touches.set(e.pointerId, local(e));
+    if (touches.size >= 2 && pinch) {
+      const p = [...touches.values()].slice(0,2);
+      const mid = {x:(p[0].x+p[1].x)/2, y:(p[0].y+p[1].y)/2};
+      const dist = Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);
+      const z = Math.min(5, Math.max(1, pinch.zoom * dist / Math.max(1,pinch.distance)));
+      zoom = z;
+      panX = mid.x - (pinch.center.x - pinch.panX) * z / pinch.zoom;
+      panY = mid.y - (pinch.center.y - pinch.panY) * z / pinch.zoom;
+      renderView(); return;
+    }
+    if (!gesture) return;
+    const here = point(e), loc = local(e);
+    if (Math.hypot(loc.x - gesture.start.x,loc.y - gesture.start.y) > 7) gesture.moved = true;
+    if (mode === 'move') {
+      panX += loc.x - gesture.local.x;
+      panY += loc.y - gesture.local.y;
+      renderView();
+    } else if ((mode === 'brush' || mode === 'erase') && valid(here)) {
+      if (!gesture.changed) { beginChange(); gesture.changed = true; }
+      stroke(gesture.p, here);
+    }
+    gesture.p = here; gesture.local = loc;
+  });
+  function finish(e, cancelled = false) {
+    if (!touches.has(e.pointerId)) return;
+    touches.delete(e.pointerId);
+    if (pinch) {
+      if (touches.size < 2) { pinch = null; gesture = null; }
+      return;
+    }
+    if (!gesture) return;
+    const p = point(e);
+    if (!cancelled && pageReady && valid(p)) {
+      if (mode === 'fill' && !gesture.moved && !boundaryMask[Math.floor(p.y)*art.width+Math.floor(p.x)]) {
+        beginChange();
+        fillRegion(Math.floor(p.x), Math.floor(p.y), selectedColor);
+      } else if ((mode === 'brush' || mode === 'erase') && !gesture.changed) {
+        beginChange(); stroke(p, p); gesture.changed = true;
+      }
+      if (gesture.changed) autoSaveCurrentPage();
+    }
+    gesture = null;
+  }
+  art.addEventListener('pointerup', e => finish(e));
+  art.addEventListener('pointercancel', e => finish(e, true));
+  // Block the old tap handler: this replaces its input handling, not its coloring algorithm.
+  art.addEventListener('click', e => { e.preventDefault(); e.stopImmediatePropagation(); }, true);
+
+  // Capture original pixels whenever a new coloring-book image loads.
+  function refreshOriginal() {
+    if (!baseImage.complete || !baseImage.naturalWidth) return;
+    const temp = document.createElement('canvas');
+    temp.width = baseImage.naturalWidth; temp.height = baseImage.naturalHeight;
+    const tctx = temp.getContext('2d', { willReadFrequently: true });
+    tctx.drawImage(baseImage, 0, 0);
+    originalPixels = tctx.getImageData(0,0,temp.width,temp.height);
+    undo = []; redo = []; gesture = null; pinch = null; touches.clear();
+    zoom = 1; panX = 0; panY = 0; renderView();
+  }
+  baseImage.addEventListener('load', refreshOriginal);
+  if (baseImage.complete && baseImage.naturalWidth) refreshOriginal();
+  renderView();
+})();
+</script>
+    
 </body>
 </html>
