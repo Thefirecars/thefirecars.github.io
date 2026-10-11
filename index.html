@@ -1442,5 +1442,270 @@ data-color="rgba(93,64,55,255)">
 </script>
 
 <!-- END FARMSIE PAINT YOUR PHOTO -->
+<!-- FARMSIE PHOTO PAINTING ZOOM -->
+
+<style>
+#farmsie-photo-zoom-controls {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 15px auto;
+}
+
+#farmsie-photo-zoom-controls button {
+  background: #0088CC;
+  color: white;
+  border: none;
+  border-radius: 12px;
+  padding: 11px 13px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+#farmsie-photo-zoom-controls button.active {
+  background: #2ECC71;
+}
+
+#farmsie-paint-viewport {
+  position: relative;
+  width: min(92vw, 450px);
+  aspect-ratio: 1;
+  margin: 15px auto;
+  overflow: hidden;
+  border-radius: 15px;
+  background: white;
+  box-shadow: 0 5px 15px #0002;
+}
+
+#farmsie-paint-viewport #farmsie-paint-stage {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  border-radius: 0;
+  box-shadow: none;
+  transform-origin: 0 0;
+}
+</style>
+
+<script>
+(() => {
+
+  const stage = document.getElementById(
+    "farmsie-paint-stage"
+  );
+
+  const overlay = document.getElementById(
+    "farmsie-paint-overlay"
+  );
+
+  if (!stage || !overlay) return;
+
+  // Create a viewport around the painting canvas.
+
+  const viewport = document.createElement("div");
+
+  viewport.id = "farmsie-paint-viewport";
+
+  stage.parentNode.insertBefore(viewport, stage);
+
+  viewport.appendChild(stage);
+
+  // Create zoom controls.
+
+  const controls = document.createElement("div");
+
+  controls.id = "farmsie-photo-zoom-controls";
+
+  controls.innerHTML = `
+    <button type="button" id="photo-zoom-in">
+      🔍 +
+    </button>
+
+    <button type="button" id="photo-zoom-out">
+      🔍 −
+    </button>
+
+    <button type="button" id="photo-zoom-reset">
+      100%
+    </button>
+
+    <button type="button" id="photo-move">
+      ✋ Move
+    </button>
+
+    <button type="button" id="photo-draw" class="active">
+      🎨 Draw
+    </button>
+  `;
+
+  viewport.before(controls);
+
+  let zoom = 1;
+  let panX = 0;
+  let panY = 0;
+
+  let moveMode = false;
+  let dragging = false;
+  let dragPointerId = null;
+
+  let lastX = 0;
+  let lastY = 0;
+
+  const zoomIn = document.getElementById("photo-zoom-in");
+  const zoomOut = document.getElementById("photo-zoom-out");
+  const zoomReset = document.getElementById("photo-zoom-reset");
+  const moveButton = document.getElementById("photo-move");
+  const drawButton = document.getElementById("photo-draw");
+
+  function limitPan() {
+
+    const width = viewport.clientWidth;
+    const height = viewport.clientHeight;
+
+    panX = Math.max(
+      width * (1 - zoom),
+      Math.min(0, panX)
+    );
+
+    panY = Math.max(
+      height * (1 - zoom),
+      Math.min(0, panY)
+    );
+  }
+
+  function updateView() {
+
+    limitPan();
+
+    stage.style.transform =
+      `translate(${panX}px, ${panY}px) scale(${zoom})`;
+
+    zoomReset.textContent =
+      Math.round(zoom * 100) + "%";
+  }
+
+  function setZoom(nextZoom) {
+
+    const oldZoom = zoom;
+
+    const newZoom = Math.max(
+      1,
+      Math.min(5, nextZoom)
+    );
+
+    const centerX = viewport.clientWidth / 2;
+    const centerY = viewport.clientHeight / 2;
+
+    panX = centerX -
+      ((centerX - panX) / oldZoom) * newZoom;
+
+    panY = centerY -
+      ((centerY - panY) / oldZoom) * newZoom;
+
+    zoom = newZoom;
+
+    updateView();
+  }
+
+  zoomIn.onclick = () => {
+    setZoom(zoom * 1.5);
+  };
+
+  zoomOut.onclick = () => {
+    setZoom(zoom / 1.5);
+  };
+
+  zoomReset.onclick = () => {
+
+    zoom = 1;
+    panX = 0;
+    panY = 0;
+
+    updateView();
+  };
+
+  // Switch between moving and painting.
+
+  moveButton.onclick = () => {
+
+    moveMode = true;
+
+    moveButton.classList.add("active");
+    drawButton.classList.remove("active");
+  };
+
+  drawButton.onclick = () => {
+
+    moveMode = false;
+
+    drawButton.classList.add("active");
+    moveButton.classList.remove("active");
+  };
+
+  // Capture movement before the normal painting handlers.
+  // This prevents dragging from accidentally drawing.
+
+  overlay.addEventListener("pointerdown", event => {
+
+    if (!moveMode) return;
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+
+    dragging = true;
+    dragPointerId = event.pointerId;
+
+    lastX = event.clientX;
+    lastY = event.clientY;
+
+    overlay.setPointerCapture(event.pointerId);
+
+  }, true);
+
+  overlay.addEventListener("pointermove", event => {
+
+    if (!moveMode) return;
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+
+    if (!dragging || event.pointerId !== dragPointerId) {
+      return;
+    }
+
+    panX += event.clientX - lastX;
+    panY += event.clientY - lastY;
+
+    lastX = event.clientX;
+    lastY = event.clientY;
+
+    updateView();
+
+  }, true);
+
+  function stopMoving(event) {
+
+    if (!moveMode) return;
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+
+    if (event.pointerId === dragPointerId) {
+      dragging = false;
+      dragPointerId = null;
+    }
+  }
+
+  overlay.addEventListener("pointerup", stopMoving, true);
+
+  overlay.addEventListener("pointercancel", stopMoving, true);
+
+  updateView();
+
+})();
+</script>
+
+<!-- END FARMSIE PHOTO PAINTING ZOOM -->
 </body>
 </html>
