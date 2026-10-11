@@ -41,7 +41,36 @@
             <button class="color-btn" style="background: #5AC8FA;" data-color="rgba(90,200,250,255)"></button>
             <button class="color-btn" style="background: #007AFF;" data-color="rgba(0,122,255,255)"></button>
             <button class="color-btn" style="background: #5856D6;" data-color="rgba(88,86,214,255)"></button>
-            <button class="color-btn" style="background: #8D6E63;" data-color="rgba(141,110,99,255)"></button>
+           <button class="color-btn" style="background: #8D6E63;" data-color="rgba(141,110,99,255)"></button>
+          <button class="color-btn"
+style="background:#FF69B4;"
+data-color="rgba(255,105,180,255)">
+</button>
+
+<button class="color-btn"
+style="background:#9B59B6;"
+data-color="rgba(155,89,182,255)">
+</button>
+
+<button class="color-btn"
+style="background:#D2B48C;"
+data-color="rgba(210,180,140,255)">
+</button>
+
+<button class="color-btn"
+style="background:#228B22;"
+data-color="rgba(34,139,34,255)">
+</button>
+
+<button class="color-btn"
+style="background:#FFE4C4;"
+data-color="rgba(255,228,196,255)">
+</button>
+
+<button class="color-btn"
+style="background:#5D4037;"
+data-color="rgba(93,64,55,255)">
+</button>
         </div>
     </div>
 
@@ -63,7 +92,7 @@
         let currentPage = 1;
         const totalPages = 4;
         const pageImages = {
-            1: '55a1fa30-1a55-4b05-b95a-79f910188cc5.png',
+            1: 'page1.png.png',
             2: 'page2.png.png',
             3: 'page3.png.png',
             4: 'page4.png.png'
@@ -376,8 +405,7 @@
   tools.setAttribute('role', 'toolbar');
   tools.setAttribute('aria-label', 'Farmsie coloring tools');
   tools.innerHTML = `
-    <button type="button" data-tool="fill" class="active">🪣 Fill</button>
-    <button type="button" data-tool="brush">🖌 Brush</button>
+    <button type="button" data-tool="brush" class="active">🖌 Brush</button>
     <button type="button" data-tool="erase">🧽 Eraser</button>
     <button type="button" data-tool="move">✋ Move</button>
     <label>Size <input id="farmsie-brush-size" type="range" min="3" max="40" value="16"></label>
@@ -390,7 +418,7 @@
     <button type="button" id="farmsie-zoomin">+</button>`;
   document.getElementById('palette-container').before(tools);
 
-  let mode = 'fill';
+  let mode = 'brush';
   let zoom = 1, panX = 0, panY = 0;
   let undo = [], redo = [];
   let originalPixels = null;
