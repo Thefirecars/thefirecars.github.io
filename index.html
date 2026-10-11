@@ -946,643 +946,501 @@ data-color="rgba(93,64,55,255)">
 </script>
 
 <!-- END FARMSIE BOOK LIBRARY -->
-<!-- FARMSIE PRIVATE PHOTO TO COLORING PAGE -->
+<!-- FARMSIE PAINT YOUR PHOTO -->
 
 <style>
-  #farmsie-photo-link {
-    margin: 16px auto;
-    padding: 13px 16px;
-    border: 0;
-    border-radius: 16px;
-    background: #8e44ad;
-    color: white;
-    font-weight: bold;
-    font-size: 16px;
-  }
+#farmsie-paint-screen[hidden] {
+  display: none;
+}
 
-  #farmsie-photo-screen[hidden],
-  #farmsie-photo-preview[hidden],
-  #farmsie-photo-actions[hidden] {
-    display: none;
-  }
+#farmsie-paint-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  overflow-y: auto;
+  background: #F7F9FC;
+  padding: 20px 12px 90px;
+  box-sizing: border-box;
+  text-align: center;
+}
 
-  #farmsie-photo-screen {
-    position: fixed;
-    inset: 0;
-    z-index: 500;
-    overflow-y: auto;
-    padding: 16px 14px 90px;
-    box-sizing: border-box;
-    background: #f7f9fc;
-    text-align: center;
-  }
+#farmsie-paint-screen h2 {
+  color: #2ECC71;
+}
 
-  #farmsie-photo-screen .inner {
-    max-width: 520px;
-    margin: auto;
-  }
+#farmsie-paint-screen button {
+  background: #0088CC;
+  color: white;
+  border: none;
+  padding: 12px;
+  border-radius: 12px;
+  font-weight: bold;
+  margin: 5px;
+}
 
-  #farmsie-photo-screen h2 {
-    color: #6c3483;
-  }
+#farmsie-upload-button {
+  background: #2ECC71;
+  color: white;
+  padding: 14px;
+  border: none;
+  border-radius: 15px;
+  font-weight: bold;
+  margin: 15px auto;
+  display: block;
+}
 
-  #farmsie-photo-screen p {
-    color: #555;
-  }
+#farmsie-paint-stage {
+  position: relative;
+  width: min(92vw, 450px);
+  aspect-ratio: 1;
+  margin: 15px auto;
+  background: white;
+  border-radius: 15px;
+  overflow: hidden;
+  box-shadow: 0 5px 15px #0002;
+}
 
-  #farmsie-photo-screen input[type="file"] {
-    display: block;
-    width: 100%;
-    box-sizing: border-box;
-    margin: 10px 0 16px;
-    padding: 12px;
-    border: 2px solid #ddd;
-    border-radius: 12px;
-    background: white;
-  }
+#farmsie-paint-stage canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
 
-  #farmsie-photo-screen label {
-    display: block;
-    margin: 14px 0 6px;
-    font-weight: bold;
-    color: #333;
-  }
+#farmsie-paint-overlay {
+  touch-action: none;
+}
 
-  #farmsie-photo-screen input[type="range"] {
-    width: 100%;
-  }
+.farmsie-paint-tools {
+  margin: 15px auto;
+  max-width: 450px;
+}
 
-  #farmsie-photo-screen button {
-    margin: 6px;
-    padding: 12px 14px;
-    border: 0;
-    border-radius: 12px;
-    background: #0088cc;
-    color: white;
-    font-weight: bold;
-    cursor: pointer;
-  }
+.farmsie-paint-tools label {
+  display: block;
+  margin: 12px;
+}
 
-  #farmsie-photo-screen button.green {
-    background: #2ecc71;
-  }
+#farmsie-paint-size {
+  width: 85%;
+}
 
-  #farmsie-photo-screen button.purple {
-    background: #8e44ad;
-  }
+#farmsie-photo-input {
+  margin: 12px auto;
+  max-width: 90%;
+}
 
-  #farmsie-photo-screen button:disabled {
-    opacity: 0.55;
-  }
-
-  #farmsie-photo-preview {
-    display: block;
-    width: min(100%, 390px);
-    aspect-ratio: 1;
-    object-fit: contain;
-    margin: 15px auto;
-    background: white;
-    border: 2px solid #ddd;
-    border-radius: 14px;
-  }
-
-  #farmsie-photo-status {
-    min-height: 24px;
-    font-size: 14px;
-    color: #444;
-  }
-
-  #farmsie-photo-list {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px;
-    margin-top: 14px;
-  }
-
-  #farmsie-photo-list button {
-    background: white;
-    color: #333;
-    border: 1px solid #ddd;
-    overflow: hidden;
-    word-break: break-word;
-  }
-
-  #farmsie-photo-list img {
-    width: 100%;
-    aspect-ratio: 1;
-    object-fit: contain;
-    display: block;
-    background: white;
-  }
-
-  .farmsie-photo-small {
-    font-size: 13px;
-    color: #666;
-  }
-
-  .farmsie-photo-values {
-    font-size: 13px;
-    color: #777;
-    margin-bottom: 10px;
-  }
+#farmsie-paint-status {
+  color: #555;
+  font-size: 14px;
+}
 </style>
 
-<section id="farmsie-photo-screen" hidden>
-  <div class="inner">
+<section id="farmsie-paint-screen" hidden>
 
-    <button id="farmsie-photo-back" type="button">
-      ← Back to Gallery
+  <button id="farmsie-paint-back">
+    ← Back to Gallery
+  </button>
+
+  <h2>🎨 Paint Your Own Photo</h2>
+
+  <p>
+    Upload a picture and paint directly over it!
+  </p>
+
+  <input
+    id="farmsie-photo-input"
+    type="file"
+    accept="image/*"
+  >
+
+  <div id="farmsie-paint-stage">
+    <canvas id="farmsie-paint-background"></canvas>
+    <canvas id="farmsie-paint-overlay"></canvas>
+  </div>
+
+  <div class="farmsie-paint-tools">
+
+    <label>
+      🎨 Choose Color
+      <input
+        id="farmsie-paint-color"
+        type="color"
+        value="#FF3B30"
+      >
+    </label>
+
+    <label>
+      🖌️ Brush Size
+      <input
+        id="farmsie-paint-size"
+        type="range"
+        min="3"
+        max="50"
+        value="15"
+      >
+    </label>
+
+    <button id="farmsie-paint-brush">
+      🖌️ Brush
     </button>
 
-    <h2>📷 Private Photo → Coloring Page</h2>
-
-    <p>
-      Take a photo or choose one from your phone.
-      Farmsie will turn it into a black-and-white coloring page.
-    </p>
-
-    <p class="farmsie-photo-small">
-      This version runs only on your device. No Cloudflare, no API, no monthly fee.
-    </p>
-
-    <input
-      id="farmsie-photo-input"
-      type="file"
-      accept="image/*"
-      capture="environment"
-    >
-
-    <label for="farmsie-photo-detail">
-      Detail
-    </label>
-    <input
-      id="farmsie-photo-detail"
-      type="range"
-      min="20"
-      max="180"
-      value="90"
-    >
-    <div class="farmsie-photo-values">
-      Lower = more lines, Higher = fewer lines
-    </div>
-
-    <label for="farmsie-photo-thickness">
-      Line Thickness
-    </label>
-    <input
-      id="farmsie-photo-thickness"
-      type="range"
-      min="1"
-      max="3"
-      value="1"
-    >
-    <div class="farmsie-photo-values">
-      1 = thin, 3 = thicker
-    </div>
-
-    <button
-      id="farmsie-photo-convert"
-      class="purple"
-      type="button"
-    >
-      🪄 Convert Photo
+    <button id="farmsie-paint-eraser">
+      🧽 Eraser
     </button>
 
-    <p id="farmsie-photo-status" role="status"></p>
+    <button id="farmsie-paint-undo">
+      ↶ Undo
+    </button>
 
-    <img
-      id="farmsie-photo-preview"
-      alt="Converted coloring page preview"
-      hidden
-    >
-
-    <div id="farmsie-photo-actions" hidden>
-
-      <button
-        id="farmsie-photo-use"
-        class="green"
-        type="button"
-      >
-        🖍 Color This Page
-      </button>
-
-      <button
-        id="farmsie-photo-download"
-        type="button"
-      >
-        ⬇ Download Blank Page
-      </button>
-
-    </div>
-
-    <h3>🖼 My Photo Creations</h3>
-    <p class="farmsie-photo-small">
-      Saved only in this device's browser storage.
-    </p>
-
-    <div id="farmsie-photo-list"></div>
+    <button id="farmsie-paint-clear">
+      ⟲ Clear Paint
+    </button>
 
   </div>
+
+  <button id="farmsie-paint-save">
+    💾 Save My Artwork
+  </button>
+
+  <p id="farmsie-paint-status">
+    Choose a picture to begin.
+  </p>
+
 </section>
 
 <script>
 (() => {
 
-  // CHANGE THIS TO YOUR OWN SECRET CODE.
-  // This hides the tool from casual public users.
-  // Important: because this is in HTML, it is hidden but not fully secure.
-  const PRIVATE_TOOL_PASSCODE = "farmsie123";
+  const screen = document.getElementById(
+    "farmsie-paint-screen"
+  );
 
-  const gallery = document.getElementById("farmsie-menu");
-  const screen = document.getElementById("farmsie-photo-screen");
-  const status = document.getElementById("farmsie-photo-status");
-  const preview = document.getElementById("farmsie-photo-preview");
-  const actions = document.getElementById("farmsie-photo-actions");
-  const list = document.getElementById("farmsie-photo-list");
-  const fileInput = document.getElementById("farmsie-photo-input");
-  const detailInput = document.getElementById("farmsie-photo-detail");
-  const thicknessInput = document.getElementById("farmsie-photo-thickness");
+  const gallery = document.getElementById(
+    "farmsie-menu"
+  );
 
-  let selectedSourceDataUrl = "";
-  let chosen = null;
+  const stage = document.getElementById(
+    "farmsie-paint-stage"
+  );
 
-  const saved = new Map();
+  const background = document.getElementById(
+    "farmsie-paint-background"
+  );
 
-  // Hide custom-page progress under stable keys.
-  const oldProgressKey = progressKey;
-  progressKey = function(pageNumber) {
-    return String(pageNumber).startsWith("farmsie-photo-")
-      ? "custom-photo-page|" + pageNumber
-      : oldProgressKey(pageNumber);
-  };
+  const overlay = document.getElementById(
+    "farmsie-paint-overlay"
+  );
 
-  // Add private button to the gallery.
-  const openButton = document.createElement("button");
-  openButton.id = "farmsie-photo-link";
-  openButton.type = "button";
-  openButton.textContent = "🔒 Private Photo Tool";
+  const bg = background.getContext("2d");
 
-  gallery.querySelector("#farmsie-picture-grid").before(openButton);
-
-  openButton.onclick = () => {
-    const entered = prompt("Enter your private Farmsie code:");
-    if (entered !== PRIVATE_TOOL_PASSCODE) {
-      alert("Incorrect code.");
-      return;
-    }
-    screen.hidden = false;
-    screen.scrollTop = 0;
-  };
-
-  document.getElementById("farmsie-photo-back").onclick = () => {
-    screen.hidden = true;
-  };
-
-  fileInput.addEventListener("change", async () => {
-    const file = fileInput.files && fileInput.files[0];
-    if (!file) return;
-
-    try {
-      selectedSourceDataUrl = await fileToDataURL(file);
-      status.textContent = "Photo loaded. Tap Convert Photo.";
-      preview.hidden = true;
-      actions.hidden = true;
-      chosen = null;
-    } catch (error) {
-      status.textContent = "Could not read the photo.";
-    }
+  const paint = overlay.getContext("2d", {
+    willReadFrequently: true
   });
 
-  function fileToDataURL(file) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = () => reject(reader.error || new Error("File read failed"));
-      reader.readAsDataURL(file);
-    });
-  }
+  const color = document.getElementById(
+    "farmsie-paint-color"
+  );
 
-  function loadImage(src) {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => resolve(img);
-      img.onerror = () => reject(new Error("Image could not load"));
-      img.src = src;
-    });
-  }
+  const size = document.getElementById(
+    "farmsie-paint-size"
+  );
 
-  function openDB() {
-    if (openDB.promise) return openDB.promise;
+  const status = document.getElementById(
+    "farmsie-paint-status"
+  );
 
-    openDB.promise = new Promise((resolve, reject) => {
-      const request = indexedDB.open("farmsie-photo-creations-v1", 1);
+  const SIZE = 900;
 
-      request.onupgradeneeded = () => {
-        const db = request.result;
-        if (!db.objectStoreNames.contains("creations")) {
-          db.createObjectStore("creations", { keyPath: "id" });
-        }
-      };
+  background.width = SIZE;
+  background.height = SIZE;
 
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
+  overlay.width = SIZE;
+  overlay.height = SIZE;
 
-    return openDB.promise;
-  }
+  let loaded = false;
+  let drawing = false;
+  let erasing = false;
+  let lastPoint = null;
 
-  async function saveCreation(item) {
-    const db = await openDB();
+  const history = [];
 
-    await new Promise((resolve, reject) => {
-      const tx = db.transaction("creations", "readwrite");
-      tx.objectStore("creations").put(item);
-      tx.oncomplete = resolve;
-      tx.onerror = () => reject(tx.error);
-      tx.onabort = () => reject(tx.error);
-    });
-  }
+  bg.fillStyle = "white";
+  bg.fillRect(0, 0, SIZE, SIZE);
 
-  async function restoreCreations() {
-    try {
-      const db = await openDB();
+  // Add upload button to existing gallery.
 
-      const items = await new Promise((resolve, reject) => {
-        const request = db.transaction("creations", "readonly")
-          .objectStore("creations")
-          .getAll();
+  const openButton = document.createElement("button");
 
-        request.onsuccess = () => resolve(request.result || []);
-        request.onerror = () => reject(request.error);
-      });
+  openButton.id = "farmsie-upload-button";
 
-      items.forEach(item => {
-        saved.set(item.id, item);
-        pageImages[item.id] = item.image;
-      });
+  openButton.textContent = "📷 Paint Your Own Photo";
 
-      renderCreationList();
-    } catch (error) {
-      console.warn("Farmsie: could not restore photo creations", error);
-    }
-  }
+  gallery.querySelector(
+    "#farmsie-picture-grid"
+  ).before(openButton);
 
-  function renderCreationList() {
-    list.replaceChildren();
+  openButton.onclick = () => {
+    screen.hidden = false;
+  };
 
-    const items = [...saved.values()].sort((a, b) => b.createdAt - a.createdAt);
+  document.getElementById(
+    "farmsie-paint-back"
+  ).onclick = () => {
+    screen.hidden = true;
+  };
 
-    if (!items.length) {
-      list.textContent = "No photo creations yet.";
-      return;
-    }
+  // Upload picture.
 
-    items.forEach(item => {
-      const card = document.createElement("button");
-      card.type = "button";
+  document.getElementById(
+    "farmsie-photo-input"
+  ).onchange = event => {
 
-      const img = document.createElement("img");
-      img.src = item.image;
-      img.alt = item.title || "Photo coloring page";
+    const file = event.target.files[0];
 
-      const title = document.createElement("div");
-      title.textContent = item.title || "Photo Creation";
+    if (!file) return;
 
-      card.append(img, title);
-      card.onclick = () => openCreation(item);
+    const url = URL.createObjectURL(file);
 
-      list.append(card);
-    });
-  }
+    const image = new Image();
 
-  function openCreation(item) {
-    chosen = item;
-    preview.src = item.image;
-    preview.hidden = false;
-    actions.hidden = false;
-    status.textContent = "Your coloring page is ready.";
-    screen.scrollTop = 0;
-  }
+    image.onload = () => {
 
-  function fitIntoSquare(imgWidth, imgHeight, squareSize) {
-    const scale = Math.min(squareSize / imgWidth, squareSize / imgHeight);
-    const drawWidth = Math.round(imgWidth * scale);
-    const drawHeight = Math.round(imgHeight * scale);
-    const dx = Math.round((squareSize - drawWidth) / 2);
-    const dy = Math.round((squareSize - drawHeight) / 2);
-    return { dx, dy, drawWidth, drawHeight };
-  }
+      bg.fillStyle = "white";
+      bg.fillRect(0, 0, SIZE, SIZE);
 
-  function thickenBinary(binary, width, height, radius) {
-    if (radius <= 1) return binary;
-
-    let current = binary;
-
-    for (let pass = 1; pass < radius; pass++) {
-      const next = new Uint8Array(current);
-
-      for (let y = 0; y < height; y++) {
-        for (let x = 0; x < width; x++) {
-          const index = y * width + x;
-          if (current[index] === 1) {
-            for (let ny = Math.max(0, y - 1); ny <= Math.min(height - 1, y + 1); ny++) {
-              for (let nx = Math.max(0, x - 1); nx <= Math.min(width - 1, x + 1); nx++) {
-                next[ny * width + nx] = 1;
-              }
-            }
-          }
-        }
-      }
-
-      current = next;
-    }
-
-    return current;
-  }
-
-  async function convertPhotoToColoringPage(sourceDataUrl, detail, thickness) {
-    const img = await loadImage(sourceDataUrl);
-
-    const size = 1024;
-
-    const srcCanvas = document.createElement("canvas");
-    srcCanvas.width = size;
-    srcCanvas.height = size;
-    const srcCtx = srcCanvas.getContext("2d", { willReadFrequently: true });
-
-    srcCtx.fillStyle = "#ffffff";
-    srcCtx.fillRect(0, 0, size, size);
-
-    const fit = fitIntoSquare(img.naturalWidth || img.width, img.naturalHeight || img.height, size);
-    srcCtx.drawImage(img, fit.dx, fit.dy, fit.drawWidth, fit.drawHeight);
-
-    const imageData = srcCtx.getImageData(0, 0, size, size);
-    const data = imageData.data;
-
-    const gray = new Float32Array(size * size);
-
-    for (let i = 0; i < gray.length; i++) {
-      const k = i * 4;
-      gray[i] = 0.299 * data[k] + 0.587 * data[k + 1] + 0.114 * data[k + 2];
-    }
-
-    // Light blur to reduce noise.
-    const blurred = new Float32Array(size * size);
-
-    for (let y = 0; y < size; y++) {
-      for (let x = 0; x < size; x++) {
-        let sum = 0;
-        let count = 0;
-
-        for (let ny = Math.max(0, y - 1); ny <= Math.min(size - 1, y + 1); ny++) {
-          for (let nx = Math.max(0, x - 1); nx <= Math.min(size - 1, x + 1); nx++) {
-            sum += gray[ny * size + nx];
-            count++;
-          }
-        }
-
-        blurred[y * size + x] = sum / count;
-      }
-    }
-
-    const binary = new Uint8Array(size * size);
-
-    // Sobel edge detection.
-    for (let y = 1; y < size - 1; y++) {
-      for (let x = 1; x < size - 1; x++) {
-        const i00 = blurred[(y - 1) * size + (x - 1)];
-        const i01 = blurred[(y - 1) * size + x];
-        const i02 = blurred[(y - 1) * size + (x + 1)];
-        const i10 = blurred[y * size + (x - 1)];
-        const i12 = blurred[y * size + (x + 1)];
-        const i20 = blurred[(y + 1) * size + (x - 1)];
-        const i21 = blurred[(y + 1) * size + x];
-        const i22 = blurred[(y + 1) * size + (x + 1)];
-
-        const gx =
-          -i00 + i02 +
-          -2 * i10 + 2 * i12 +
-          -i20 + i22;
-
-        const gy =
-          -i00 - 2 * i01 - i02 +
-           i20 + 2 * i21 + i22;
-
-        const magnitude = Math.sqrt(gx * gx + gy * gy);
-
-        if (magnitude > detail) {
-          binary[y * size + x] = 1;
-        }
-      }
-    }
-
-    const thickened = thickenBinary(binary, size, size, thickness);
-
-    const outCanvas = document.createElement("canvas");
-    outCanvas.width = size;
-    outCanvas.height = size;
-    const outCtx = outCanvas.getContext("2d");
-    const outImage = outCtx.createImageData(size, size);
-    const outData = outImage.data;
-
-    for (let i = 0; i < thickened.length; i++) {
-      const k = i * 4;
-      const isLine = thickened[i] === 1;
-      const value = isLine ? 0 : 255;
-
-      outData[k] = value;
-      outData[k + 1] = value;
-      outData[k + 2] = value;
-      outData[k + 3] = 255;
-    }
-
-    outCtx.putImageData(outImage, 0, 0);
-
-    return outCanvas.toDataURL("image/png");
-  }
-
-  document.getElementById("farmsie-photo-convert").onclick = async (event) => {
-    if (!selectedSourceDataUrl) {
-      status.textContent = "Please choose or take a photo first.";
-      return;
-    }
-
-    const button = event.currentTarget;
-    button.disabled = true;
-    status.textContent = "Converting photo into a coloring page...";
-
-    try {
-      const image = await convertPhotoToColoringPage(
-        selectedSourceDataUrl,
-        Number(detailInput.value),
-        Number(thicknessInput.value)
+      const scale = Math.min(
+        SIZE / image.width,
+        SIZE / image.height
       );
 
-      const item = {
-        id: "farmsie-photo-" + Date.now() + "-" + Math.random().toString(36).slice(2, 7),
-        title: "Photo Creation " + new Date().toLocaleString(),
+      const width = image.width * scale;
+      const height = image.height * scale;
+
+      const x = (SIZE - width) / 2;
+      const y = (SIZE - height) / 2;
+
+      bg.drawImage(
         image,
-        createdAt: Date.now()
-      };
+        x,
+        y,
+        width,
+        height
+      );
 
-      saved.set(item.id, item);
-      pageImages[item.id] = item.image;
+      paint.clearRect(0, 0, SIZE, SIZE);
 
-      openCreation(item);
-      renderCreationList();
+      history.length = 0;
 
-      try {
-        await saveCreation(item);
-      } catch (error) {
-        status.textContent = "Converted, but browser storage may be full.";
-      }
+      loaded = true;
 
-    } catch (error) {
-      console.error(error);
-      status.textContent = "Conversion failed. Try a clearer photo.";
-    } finally {
-      button.disabled = false;
+      status.textContent =
+        "Photo loaded! Start painting.";
+
+      URL.revokeObjectURL(url);
+    };
+
+    image.onerror = () => {
+      status.textContent = "Could not open this picture.";
+      URL.revokeObjectURL(url);
+    };
+
+    image.src = url;
+  };
+
+  // Painting controls.
+
+  function getPoint(event) {
+
+    const rect = overlay.getBoundingClientRect();
+
+    return {
+      x: (event.clientX - rect.left)
+         * SIZE / rect.width,
+
+      y: (event.clientY - rect.top)
+         * SIZE / rect.height
+    };
+  }
+
+  function saveUndo() {
+
+    history.push(
+      paint.getImageData(0, 0, SIZE, SIZE)
+    );
+
+    if (history.length > 6) {
+      history.shift();
     }
+  }
+
+  function drawLine(from, to) {
+
+    paint.save();
+
+    paint.globalCompositeOperation =
+      erasing ? "destination-out" : "source-over";
+
+    paint.strokeStyle = color.value;
+
+    paint.lineWidth =
+      Number(size.value) *
+      SIZE / stage.clientWidth;
+
+    paint.lineCap = "round";
+    paint.lineJoin = "round";
+
+    paint.beginPath();
+
+    paint.moveTo(from.x, from.y);
+
+    paint.lineTo(to.x, to.y);
+
+    paint.stroke();
+
+    // Draw a dot for a single tap.
+    if (from.x === to.x && from.y === to.y) {
+      paint.fillStyle = color.value;
+      paint.beginPath();
+      paint.arc(
+        to.x, to.y,
+        paint.lineWidth / 2,
+        0, Math.PI * 2
+      );
+      paint.fill();
+    }
+
+    paint.restore();
+  }
+
+  overlay.addEventListener("pointerdown", event => {
+
+    if (!loaded) return;
+
+    event.preventDefault();
+
+    overlay.setPointerCapture(event.pointerId);
+
+    saveUndo();
+
+    drawing = true;
+    lastPoint = getPoint(event);
+
+    drawLine(lastPoint, lastPoint);
+  });
+
+  overlay.addEventListener("pointermove", event => {
+
+    if (!drawing) return;
+
+    event.preventDefault();
+
+    const point = getPoint(event);
+
+    drawLine(lastPoint, point);
+
+    lastPoint = point;
+  });
+
+  function finishPainting() {
+    drawing = false;
+    lastPoint = null;
+  }
+
+  overlay.addEventListener(
+    "pointerup", finishPainting
+  );
+
+  overlay.addEventListener(
+    "pointercancel", finishPainting
+  );
+
+  document.getElementById(
+    "farmsie-paint-brush"
+  ).onclick = () => {
+    erasing = false;
+    status.textContent = "Brush selected.";
   };
 
-  document.getElementById("farmsie-photo-use").onclick = () => {
-    if (!chosen) return;
-
-    currentPage = chosen.id;
-    pageImages[chosen.id] = chosen.image;
-
-    loadBookPage(chosen.id);
-
-    setTimeout(() => {
-      document.getElementById("page-title").textContent = "My Photo Creation 🎨";
-    }, 50);
-
-    screen.hidden = true;
-    gallery.hidden = true;
+  document.getElementById(
+    "farmsie-paint-eraser"
+  ).onclick = () => {
+    erasing = true;
+    status.textContent = "Eraser selected.";
   };
 
-  document.getElementById("farmsie-photo-download").onclick = async () => {
-    if (!chosen) return;
+  document.getElementById(
+    "farmsie-paint-undo"
+  ).onclick = () => {
 
-    const imageBlob = await (await fetch(chosen.image)).blob();
-    const url = URL.createObjectURL(imageBlob);
+    if (!history.length) return;
 
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "Farmsie-Photo-Coloring-Page.png";
-
-    document.body.append(link);
-    link.click();
-    link.remove();
-
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    paint.putImageData(history.pop(), 0, 0);
   };
 
-  restoreCreations();
+  document.getElementById(
+    "farmsie-paint-clear"
+  ).onclick = () => {
+
+    if (!loaded) return;
+
+    if (!confirm("Remove all paint from this photo?")) {
+      return;
+    }
+
+    saveUndo();
+
+    paint.clearRect(0, 0, SIZE, SIZE);
+  };
+
+  // Download the original photo with paint on top.
+
+  document.getElementById(
+    "farmsie-paint-save"
+  ).onclick = () => {
+
+    if (!loaded) {
+      alert("Please upload a photo first.");
+      return;
+    }
+
+    const result = document.createElement("canvas");
+
+    result.width = SIZE;
+    result.height = SIZE;
+
+    const ctx = result.getContext("2d");
+
+    ctx.drawImage(background, 0, 0);
+    ctx.drawImage(overlay, 0, 0);
+
+    result.toBlob(blob => {
+
+      if (!blob) return;
+
+      const url = URL.createObjectURL(blob);
+
+      const link = document.createElement("a");
+
+      link.href = url;
+      link.download = "Farmsie-My-Artwork.png";
+
+      document.body.appendChild(link);
+
+      link.click();
+      link.remove();
+
+      setTimeout(() => {
+        URL.revokeObjectURL(url);
+      }, 60000);
+
+      status.textContent = "Artwork saved!";
+    }, "image/png");
+  };
 
 })();
 </script>
 
-<!-- END FARMSIE PRIVATE PHOTO TO COLORING PAGE -->
+<!-- END FARMSIE PAINT YOUR PHOTO -->
 </body>
 </html>
