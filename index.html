@@ -475,8 +475,19 @@ data-color="rgba(93,64,55,255)">
   });
 
   function limitPan() {
-    panX = Math.max(stage.clientWidth * (1 - zoom), Math.min(0, panX));
-    panY = Math.max(stage.clientHeight * (1 - zoom), Math.min(0, panY));
+    const visible = 40;
+    const width = art.clientWidth * zoom;
+    const height = art.clientHeight * zoom;
+
+    panX = Math.max(
+        visible - width,
+        Math.min(stage.clientWidth - visible, panX)
+    );
+
+    panY = Math.max(
+        visible - height,
+        Math.min(stage.clientHeight - visible, panY)
+    );
   }
   function renderView() {
     limitPan();
