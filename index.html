@@ -1968,4 +1968,113 @@ data-color="rgba(93,64,55,255)">
 
 </section>
 </body>
+<style>
+body #farmsie-tools button,
+body #farmsie-tools label,
+body .farmsie-paint-tools,
+body .farmsie-paint-tools *,
+body #farmsie-photo-zoom-controls button,
+body .farmsie-tools-toggle {
+    font-family: system-ui, sans-serif;
+    font-weight: 600;
+    -webkit-text-stroke: 0;
+    text-shadow: none;
+    color: #fff;
+}
+
+body .farmsie-tools-toggle {
+    background: #454545;
+    border: 1px solid #777;
+    border-radius: 8px;
+    padding: 10px;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+body.farmsie-tools-hidden #farmsie-tools,
+body.farmsie-tools-hidden #palette-container {
+    display: none;
+}
+
+#farmsie-paint-screen.farmsie-tools-hidden
+.farmsie-paint-tools,
+#farmsie-paint-screen.farmsie-tools-hidden
+#farmsie-photo-zoom-controls {
+    display: none;
+}
+
+body #farmsie-paint-screen {
+    background: #808080;
+}
+
+body .farmsie-paint-tools,
+body #farmsie-photo-zoom-controls {
+    background: #343434;
+    border-radius: 10px;
+    padding: 8px;
+}
+
+body .farmsie-paint-tools button,
+body #farmsie-photo-zoom-controls button {
+    background: #505050;
+}
+</style>
+
+<script>
+(() => {
+    function addToolsToggle(parent, target, controls) {
+        if (!parent || !target) return;
+
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'farmsie-tools-toggle';
+        button.textContent = 'Hide tools';
+        button.setAttribute('aria-expanded', 'true');
+        button.setAttribute('aria-controls', controls);
+
+        button.addEventListener('click', () => {
+            const hidden = target.classList.toggle(
+                'farmsie-tools-hidden'
+            );
+
+            button.textContent = hidden
+                ? 'Show tools'
+                : 'Hide tools';
+
+            button.setAttribute(
+                'aria-expanded',
+                String(!hidden)
+            );
+        });
+
+        parent.appendChild(button);
+    }
+
+    addToolsToggle(
+        document.querySelector('header'),
+        document.body,
+        'farmsie-tools palette-container'
+    );
+
+    const photoScreen = document.getElementById(
+        'farmsie-paint-screen'
+    );
+    const photoTools = document.querySelector(
+        '.farmsie-paint-tools'
+    );
+
+    if (photoScreen && photoTools) {
+        photoTools.id = 'farmsie-photo-tools';
+
+        const toggleRow = document.createElement('div');
+        photoTools.before(toggleRow);
+
+        addToolsToggle(
+            toggleRow,
+            photoScreen,
+            'farmsie-photo-tools farmsie-photo-zoom-controls'
+        );
+    }
+})();
+</script>
 </html>
