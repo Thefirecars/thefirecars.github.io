@@ -2077,4 +2077,153 @@ body #farmsie-photo-zoom-controls button {
     }
 })();
 </script>
+<style>
+body .farmsie-tool-panel {
+    flex: 0 0 auto;
+    display: inline-block;
+    margin: 3px;
+}
+
+body .farmsie-tool-panel > summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: #505050;
+    color: white;
+    font: 600 13px system-ui, sans-serif;
+    text-shadow: none;
+    -webkit-text-stroke: 0;
+}
+
+body .farmsie-tool-panel > summary::-webkit-details-marker {
+    display: none;
+}
+
+body .farmsie-tool-panel[open] > summary {
+    background: #0088cc;
+}
+
+body .farmsie-panel-content {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    bottom: 215px;
+    z-index: 650;
+    box-sizing: border-box;
+    max-height: 40vh;
+    overflow: auto;
+    padding: 16px;
+    background: #292929;
+    color: white;
+    border: 1px solid #666;
+    border-radius: 12px;
+    box-shadow: 0 6px 24px #0006;
+}
+
+body .farmsie-panel-content label {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+body .farmsie-panel-content input[type="range"] {
+    width: 100%;
+    min-width: 0;
+}
+
+body #farmsie-tools #palette-container {
+    position: static;
+    width: 100%;
+    padding: 12px 0 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+body #farmsie-tools .palette-inner {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 5px;
+}
+
+body #farmsie-tools .color-btn {
+    width: 32px;
+    height: 32px;
+}
+
+body #farmsie-tools {
+    bottom: 76px;
+}
+</style>
+
+<script>
+(() => {
+    function makePanel(host, title, elements) {
+        const items = elements.filter(Boolean);
+        if (!host || !items.length) return;
+
+        const panel = document.createElement('details');
+        panel.className = 'farmsie-tool-panel';
+
+        const summary = document.createElement('summary');
+        summary.textContent = title;
+
+        const content = document.createElement('div');
+        content.className = 'farmsie-panel-content';
+
+        panel.append(summary, content);
+        host.appendChild(panel);
+
+        items.forEach(element => content.appendChild(element));
+
+        panel.addEventListener('toggle', () => {
+            if (!panel.open) return;
+
+            document.querySelectorAll(
+                '.farmsie-tool-panel[open]'
+            ).forEach(other => {
+                if (other !== panel) other.open = false;
+            });
+        });
+    }
+
+    const bookTools = document.getElementById('farmsie-tools');
+    const bookSize = document.getElementById('farmsie-brush-size');
+    const bookColor = document.getElementById('farmsie-custom-color');
+
+    makePanel(bookTools, 'Size', [
+        bookSize?.closest('label')
+    ]);
+
+    makePanel(bookTools, 'Colors', [
+        bookColor?.closest('label'),
+        document.getElementById('palette-container')
+    ]);
+
+    const photoTools = document.querySelector('.farmsie-paint-tools');
+    const photoSize = document.getElementById('farmsie-paint-size');
+    const photoColor = document.getElementById('farmsie-paint-color');
+
+    if (photoSize) {
+        photoSize.setAttribute('aria-label', 'Brush size');
+    }
+
+    makePanel(photoTools, 'Size', [photoSize]);
+
+    makePanel(photoTools, 'Colors', [
+        photoColor?.closest('label')
+    ]);
+
+    document.addEventListener('click', event => {
+        if (event.target.closest('.farmsie-tool-panel')) return;
+
+        document.querySelectorAll(
+            '.farmsie-tool-panel[open]'
+        ).forEach(panel => {
+            panel.open = false;
+        });
+    });
+})();
+</script>
 </html>
