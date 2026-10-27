@@ -90,14 +90,21 @@ data-color="rgba(93,64,55,255)">
         const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
         let currentPage = 1;
-        const totalPages = 4;
+        const totalPages = 12;
         const pageImages = {
-            1: 'page1.png.png',
-            2: 'page2.png.png',
-            3: 'page3.png.png',
-            4: 'page4.png.png'
-        };
-
+    1: 'page1.png.png',
+    2: 'page2.png.png',
+    3: 'page3.png.png',
+    4: 'page4.png.png',
+    5: 'file_000000001b3481fdbc02a2d9d05c1c79.png',
+    6: 'file_000000005e1c81fd9c6139b3a75bafb9.png',
+    7: 'file_000000007c2481f7b7a44c4ff447159a.png',
+    8: 'file_000000008b5c81fdb2bd03ef29090ca4.png',
+    9: 'file_0000000094e481fda213fff909ca8e1a.png',
+    10: 'file_00000000aeac81fd81d205f864f7cc03.png',
+    11: 'file_00000000cbe081fdaed85612dcdcdc47.png',
+    12: 'file_00000000f66482308954ca8226960577.png'
+};
         let selectedColor = [255, 59, 48, 255];
         const baseImage = new Image();
         let boundaryMask = null;
@@ -803,12 +810,17 @@ data-color="rgba(93,64,55,255)">
 
     // Our first real coloring book.
     const books = [
-        {
-            title: 'My First Farmsie Coloring Book',
-            category: 'faith',
-            pages: [1, 2, 3, 4]
-        }
-    ];
+    {
+        title: 'My First Farmsie Coloring Book',
+        category: 'faith',
+        pages: [1, 2, 3, 4]
+    },
+    {
+        title: 'Animal Adventures',
+        category: 'animals',
+        pages: [5, 6, 7, 8, 9, 10, 11, 12]
+    }
+];
 
     function prepareScreen(title, message, backText, backAction) {
         heading.textContent = title;
