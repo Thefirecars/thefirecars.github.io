@@ -1176,6 +1176,79 @@ data-color="rgba(93,64,55,255)">
 #farmsie-paint-screen[hidden] {
   display: none;
 }
+    
+     // SCREEN 2: BOOKS
+    function showBooks(category) {
+
+        prepareScreen(
+            category.name,
+            'Choose a coloring book!',
+            '← Back to Categories',
+            showCategories
+        );
+
+        books.filter(
+            book => book.category === category.id
+        ).forEach(book => {
+
+            createCard(
+                book.title,
+                book.pages.length + ' Free Pictures',
+                pageImages[book.pages[0]],
+                () => showPictures(book)
+            );
+
+        });
+    }
+
+    // SCREEN 3: PICTURES
+    function showPictures(book) {
+
+        prepareScreen(
+            book.title,
+            'Choose a picture to color!',
+            '← Back to Books',
+            () => {
+                const category = categories.find(
+                    item => item.id === book.category
+                );
+                showBooks(category);
+            }
+        );
+
+        book.pages.forEach(pageNumber => {
+
+            createCard(
+                'Picture ' + pageNumber,
+                '🎨 Start Coloring',
+                pageImages[pageNumber],
+                () => {
+
+                    currentPage = pageNumber;
+
+                    loadBookPage(pageNumber);
+
+                    menu.hidden = true;
+
+                }
+            );
+
+        });
+    }
+
+    // Begin at the category selection screen.
+    showCategories();
+
+})();
+</script>
+
+<!-- END FARMSIE BOOK LIBRARY -->
+<!-- FARMSIE PAINT YOUR PHOTO -->
+
+<style>
+#farmsie-paint-screen[hidden] {
+  display: none;
+}
 
 #farmsie-paint-screen {
   position: fixed;
