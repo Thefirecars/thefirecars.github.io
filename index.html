@@ -1150,7 +1150,7 @@ function showCategories() {
         );
 
         const card = grid.lastElementChild;
-        card.style.minWidth = '0';
+        card.style.scrollSnapAlign = 'start';
         card.style.overflowWrap = 'anywhere';
         categoryRow.appendChild(card);
     });
