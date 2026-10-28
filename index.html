@@ -1074,35 +1074,138 @@ data-color="rgba(93,64,55,255)">
         grid.appendChild(card);
     }
 
-    // SCREEN 1: CATEGORIES
-    function showCategories() {
+function showCategories() {
+    prepareScreen(
+        'Farmsie',
+        'Your coloring',
+        '← Continue Coloring',
+        () => { menu.hidden = true; }
+    );
 
-        prepareScreen(
-            '🌻 Farmsie Coloring Shop',
-            'Choose your favorite category!',
-            '← Continue Coloring',
-            () => { menu.hidden = true; }
+    const preview = document.createElement('section');
+    preview.style.cssText = `
+        grid-column: 1 / -1;
+        width: 100%;
+        max-width: 520px;
+        margin: 0 auto 20px;
+        overflow: hidden;
+        background: #202124;
+        border: 1px solid #414348;
+        border-radius: 12px;
+    `;
+
+    preview.innerHTML = `
+        <img alt="Your saved coloring"
+             hidden
+             style="display:none; width:100%; height:auto;">
+        <p class="preview-message"
+           style="padding:24px 16px;">
+            Loading your saved coloring…
+        </p>
+        <div class="stats-bar"
+             aria-label="Public counts not connected">
+            <span>Likes —</span>
+            <span>Views —</span>
+        </div>
+    `;
+
+    grid.appendChild(preview);
+
+    const heading = document.createElement('h3');
+    heading.textContent = 'Categories';
+    heading.style.cssText =
+        'grid-column:1 / -1; margin:0 0 12px;';
+    grid.appendChild(heading);
+
+    const categoryRow = document.createElement('div');
+    categoryRow.style.cssText = `
+        grid-column: 1 / -1;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+    `;
+    grid.appendChild(categoryRow);
+
+    categories.forEach(category => {
+        const availableBooks = books.filter(
+            book => book.category === category.id
         );
 
-        categories.forEach(category => {
+        createCard(
+            category.name,
+            availableBooks.length
+                ? 'Open Collection'
+                : 'Coming Soon',
+            availableBooks.length
+                ? pageImages[availableBooks[0].pages[0]]
+                : null,
+            availableBooks.length
+                ? () => showBooks(category)
+                : null
+        );
 
-            const availableBooks = books.filter(
-                book => book.category === category.id
-            );
+        const card = grid.lastElementChild;
+        card.style.minWidth = '0';
+        card.style.overflowWrap = 'anywhere';
+        categoryRow.appendChild(card);
+    });
 
-            createCard(
-                category.name,
-                availableBooks.length ? 'Open Collection' : 'Coming Soon',
-                availableBooks.length
-                    ? pageImages[availableBooks[0].pages[0]]
-                    : null,
-                availableBooks.length
-                    ? () => showBooks(category)
-                    : null
-            );
+    // Read existing saved artwork without changing it.
+    (async () => {
+        const message = preview.querySelector('.preview-message');
+        const image = preview.querySelector('img');
 
-        });
-    }
+        try {
+            await saveQueue;
+            const db = await openProgressDB();
+
+            // Try the current picture first, then other saved pages.
+            const pages = [
+                currentPage,
+                ...Object.keys(pageImages)
+                    .map(Number)
+                    .filter(number => number !== currentPage)
+            ];
+
+            for (const number of pages) {
+                if (!preview.isConnected) return;
+
+                const saved = await new Promise((resolve, reject) => {
+                    const transaction = db.transaction(
+                        progressStoreName, 'readonly'
+                    );
+                    const request = transaction
+                        .objectStore(progressStoreName)
+                        .get(progressKey(number));
+
+                    request.onsuccess = () => resolve(request.result);
+                    request.onerror = () => reject(request.error);
+                });
+
+                if (!saved?.png) continue;
+                if (!preview.isConnected) return;
+
+                const url = URL.createObjectURL(saved.png);
+                image.onload = image.onerror = () => {
+                    URL.revokeObjectURL(url);
+                };
+                image.src = url;
+                image.hidden = false;
+                image.style.display = 'block';
+                message.textContent = `Your saved coloring • Picture ${number}`;
+                return;
+            }
+
+            message.textContent =
+                'Choose a picture below and start coloring. Your saved artwork will appear here.';
+        } catch (error) {
+            message.textContent =
+                'Your saved preview could not be loaded.';
+            console.warn('Farmsie preview:', error);
+        }
+    })
+();
+}
 
     // SCREEN 2: BOOKS
     function showBooks(category) {
