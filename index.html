@@ -1082,7 +1082,15 @@ function showCategories() {
         () => { menu.hidden = true; }
     );
 
-    const preview = document.createElement('section');
+    const homeTitle = menu.querySelector('h2');
+homeTitle.style.fontSize = 'clamp(36px, 9vw, 52px)';
+
+// Restore the normal heading size when leaving the homepage.
+const restoreTitleSize = () => {
+    homeTitle.style.removeProperty('font-size');
+};
+
+menu.addEventListener('click', restoreTitleSize, { once: true });
     preview.style.cssText = `
         grid-column: 1 / -1;
         width: 100%;
