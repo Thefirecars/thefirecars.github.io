@@ -1209,7 +1209,9 @@ categoryRow.style.cssText = `
                 image.src = url;
                 image.hidden = false;
                 image.style.display = 'block';
-                image.style.cursor = 'pointer';
+                 message.textContent = `Your saved coloring • Picture ${number}`;
+                return;
+           image.style.cursor = 'pointer';
 image.tabIndex = 0;
 image.setAttribute('role', 'button');
 image.setAttribute('aria-label', `Continue coloring Picture ${number}`);
@@ -1227,8 +1229,6 @@ image.onkeydown = event => {
         resumePicture();
     }
 };
-                message.textContent = `Your saved coloring • Picture ${number}`;
-                return;
             }
 
             message.textContent =
