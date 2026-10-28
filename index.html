@@ -1127,7 +1127,8 @@ preview.style.cssText = `
     grid.appendChild(heading);
 
     categoryRow.style.cssText = `
-    const categoryRow = document.createElement('div');
+const categoryRow = document.createElement('div');
+categoryRow.style.cssText = `
     grid-column: 1 / -1;
     display: grid;
     grid-auto-flow: column;
