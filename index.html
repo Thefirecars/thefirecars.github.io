@@ -2206,6 +2206,65 @@ body .farmsie-panel-content input[type="range"]::-moz-range-thumb {
     border-radius: 50%;
     background: #0088cc;
 }
+/* Clean gallery cards */
+body .farmsie-picture-card {
+    padding: 0;
+    overflow: hidden;
+    background: #202124;
+    border: 1px solid #414348;
+    border-radius: 12px;
+    box-shadow: 0 3px 10px #0003;
+    text-align: left;
+}
+
+body .farmsie-picture-card img {
+    display: block;
+    width: 100%;
+    height: auto;
+    margin: 0;
+    border-radius: 0;
+}
+
+body .farmsie-picture-card span,
+body .farmsie-picture-card .stat-btn {
+    font-family: system-ui, sans-serif;
+    color: #e8eaed;
+    -webkit-text-stroke: 0;
+    text-shadow: none;
+}
+
+body .farmsie-picture-card > span {
+    display: block;
+    padding: 12px;
+    font-size: 15px;
+    font-weight: 600;
+}
+
+body .farmsie-picture-card .stats-bar {
+    box-sizing: border-box;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    padding: 10px 12px;
+    border-top: 1px solid #414348;
+    font: 13px system-ui, sans-serif;
+    color: #bdc1c6;
+    -webkit-text-stroke: 0;
+    text-shadow: none;
+}
+
+body .farmsie-picture-card .stat-btn {
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    padding: 6px;
+    font-size: 13px;
+}
+
+body .farmsie-picture-card .stat-btn.liked {
+    color: #ff6577;
+}
 </style>
 
 <script>
