@@ -2111,7 +2111,7 @@ body .farmsie-panel-content {
     position: fixed;
     left: 12px;
     right: 12px;
-    bottom: 215px;
+    bottom: 140px;
     z-index: 650;
     box-sizing: border-box;
     max-height: 40vh;
@@ -2122,6 +2122,7 @@ body .farmsie-panel-content {
     border: 1px solid #666;
     border-radius: 12px;
     box-shadow: 0 6px 24px #0006;
+
 }
 
 body .farmsie-panel-content label {
@@ -2157,6 +2158,53 @@ body #farmsie-tools .color-btn {
 
 body #farmsie-tools {
     bottom: 76px;
+}
+body .farmsie-panel-content label {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+}
+
+body .farmsie-panel-content input[type="range"] {
+    flex: 1;
+    width: 100%;
+    min-width: 0;
+    height: 44px;
+    margin: 0;
+}
+
+body .farmsie-panel-content input[type="range"]::-webkit-slider-thumb {
+    width: 28px;
+    height: 28px;
+    -webkit-appearance: none;
+    appearance: none;
+    border-radius: 50%;
+    background: #0088cc;
+}
+
+body .farmsie-panel-content input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    background: transparent;
+}
+
+body .farmsie-panel-content input[type="range"]::-webkit-slider-runnable-track {
+    height: 8px;
+    background: #ddd;
+    border-radius: 4px;
+}
+
+body .farmsie-panel-content input[type="range"]::-webkit-slider-thumb {
+    margin-top: -10px;
+}
+
+body .farmsie-panel-content input[type="range"]::-moz-range-thumb {
+    width: 28px;
+    height: 28px;
+    border: 0;
+    border-radius: 50%;
+    background: #0088cc;
 }
 </style>
 
