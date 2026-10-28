@@ -1192,6 +1192,24 @@ function showCategories() {
                 image.src = url;
                 image.hidden = false;
                 image.style.display = 'block';
+                image.style.cursor = 'pointer';
+image.tabIndex = 0;
+image.setAttribute('role', 'button');
+image.setAttribute('aria-label', `Continue coloring Picture ${number}`);
+
+const resumePicture = () => {
+    currentPage = number;
+    loadBookPage(number);
+    menu.hidden = true;
+};
+
+image.onclick = resumePicture;
+image.onkeydown = event => {
+    if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        resumePicture();
+    }
+};
                 message.textContent = `Your saved coloring • Picture ${number}`;
                 return;
             }
