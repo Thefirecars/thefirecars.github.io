@@ -452,7 +452,13 @@ data-color="rgba(93,64,55,255)">
                 ctx.drawImage(baseImage, 0, 0);
                 buildBoundaryMask();
                 await restorePageProgress(num, generation);
-                if (generation === pageLoadGeneration) pageReady = true;
+                if (generation === pageLoadGeneration) {
+    pageReady = true;
+
+    if (typeof window.umami?.track === 'function') {
+        window.umami.track(`Picture ${num} loaded`);
+    }
+                }
             };
             baseImage.onerror = () => {
                 if (generation === pageLoadGeneration) {
