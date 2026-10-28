@@ -1127,6 +1127,7 @@ menu.addEventListener('click', restoreTitleSize, { once: true });
     grid.appendChild(heading);
 
     categoryRow.style.cssText = `
+    const categoryRow = document.createElement('div');
     grid-column: 1 / -1;
     display: grid;
     grid-auto-flow: column;
