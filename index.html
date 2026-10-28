@@ -1092,6 +1092,7 @@ const restoreTitleSize = () => {
 
 menu.addEventListener('click', restoreTitleSize, { once: true });
     preview.style.cssText = `
+    const preview = document.createElement('section');
         grid-column: 1 / -1;
         width: 100%;
         max-width: 520px;
