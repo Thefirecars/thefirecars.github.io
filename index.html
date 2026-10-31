@@ -2692,6 +2692,11 @@ art.addEventListener('pointerdown', event => {
 let roundVersion = 0;
 
 function lockPage() {
+    clearInterval(coloringClock);
+coloringClock = null;
+coloringDeadline = 0;
+timerBox.style.display = 'none';
+window.farmsieCanPaint = false;
     unlocked = false;
     roundVersion++;
     box.style.display = 'grid';
