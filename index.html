@@ -2667,7 +2667,8 @@ choices.forEach((name, player) => {
                 controls.appendChild(start);
 
                 start.onclick = () => {
-                    unlocked = true;
+    window.farmsieCanPaint = true;
+    unlocked = true;
                     box.style.display = 'none';
                     start.remove();
                 };
