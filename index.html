@@ -2483,4 +2483,106 @@ body .farmsie-picture-card .stat-btn.liked {
     });
 })();
 </script>
+<style>
+#farmsie-hand-test {
+    margin: 20px auto;
+    padding: 16px;
+    max-width: 360px;
+    border-radius: 14px;
+    background: #202124;
+    color: white;
+}
+
+#farmsie-hand-test .hands {
+    display: flex;
+    justify-content: space-around;
+    padding: 20px 0;
+}
+
+#farmsie-hand-test svg {
+    width: 90px;
+    height: 100px;
+}
+
+#farmsie-hand-test .opponent {
+    transform: scaleX(-1);
+}
+
+#farmsie-hand-test.playing svg {
+    animation: farmsie-hand-bounce 0.5s ease-in-out 3;
+}
+
+@keyframes farmsie-hand-bounce {
+    0%, 100% { transform: translateY(0) rotate(0); }
+    50% { transform: translateY(-20px) rotate(-10deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #farmsie-hand-test.playing svg {
+        animation: none;
+    }
+}
+</style>
+
+<script>
+(() => {
+    const menu = document.getElementById('farmsie-menu');
+    if (!menu || document.getElementById('farmsie-hand-test')) return;
+
+    const fist = `
+        <svg viewBox="0 0 100 110" aria-hidden="true">
+            <g fill="white" stroke="#111" stroke-width="3.5"
+               stroke-linecap="round" stroke-linejoin="round">
+                <path d="M30 102V82
+                         Q16 73 16 57V35
+                         Q16 23 27 23
+                         Q30 12 41 17
+                         Q49 8 59 17
+                         Q72 13 77 25
+                         Q88 25 88 38V62
+                         Q88 76 73 83V102Z"/>
+                <path d="M28 25V43 M42 20V42
+                         M58 20V43 M74 28V46"
+                      fill="none"/>
+                <path d="M18 52Q28 42 39 50L57 62
+                         Q62 70 54 75
+                         Q49 77 43 73L31 65"/>
+            </g>
+        </svg>`;
+
+    const box = document.createElement('section');
+    box.id = 'farmsie-hand-test';
+    box.innerHTML = `
+        <div>Rock, Paper, Scissors</div>
+        <div class="hands">
+            <div>${fist}<div>You</div></div>
+            <div><div class="opponent">${fist}</div>
+                <div>Computer</div></div>
+        </div>
+        <button type="button">Test hand animation</button>
+        <p aria-live="polite">Ready?</p>
+    `;
+
+    menu.appendChild(box);
+
+    const button = box.querySelector('button');
+    const message = box.querySelector('p');
+
+    button.onclick = () => {
+        button.disabled = true;
+        box.classList.remove('playing');
+        void box.offsetWidth;
+        box.classList.add('playing');
+        message.textContent = 'Rock…';
+
+        setTimeout(() => message.textContent = 'Paper…', 500);
+        setTimeout(() => message.textContent = 'Scissors!', 1000);
+        setTimeout(() => {
+            box.classList.remove('playing');
+            message.textContent = 'Animation finished!';
+            button.disabled = false;
+        }, 1500);
+    };
+})();
+</script>
 </html>
