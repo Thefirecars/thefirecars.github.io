@@ -454,7 +454,7 @@ if (num > unlockedThrough) {
 
 currentPage = num;
             window.farmsieCanPaint = false;
-            window.farmsieLockChallenge?.();
+            window.farmsieLockChallenge?.(true);
             const generation = ++pageLoadGeneration;
             pageReady = false;
             boundaryMask = null;
