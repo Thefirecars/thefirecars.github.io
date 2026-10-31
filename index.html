@@ -2563,12 +2563,117 @@ body .farmsie-picture-card .stat-btn.liked {
         <p aria-live="polite">Ready?</p>
     `;
 
-    menu.appendChild(box);
+    document.getElementById('canvas-container').appendChild(box);
 
-    const button = box.querySelector('button');
-    const message = box.querySelector('p');
+box.style.cssText = `
+    position: absolute;
+    inset: 0;
+    z-index: 50;
+    max-width: none;
+    margin: 0;
+    overflow-y: auto;
+    box-sizing: border-box;
+    display: grid;
+    align-content: center;
+    background: #202124;
+`;
+
+const art = document.getElementById('coloring-canvas');
+let unlocked = false;
+let roundVersion = 0;
+
+function lockPage() {
+    unlocked = false;
+    roundVersion++;
+    box.style.display = 'grid';
+    box.querySelectorAll('button').forEach(b => b.disabled = false);
+    box.querySelector('p').textContent = 'Win a round to start coloring!';
+    box.classList.remove('playing');
+}
+
+window.farmsieLockChallenge = lockPage;
+
+art.addEventListener('pointerdown', event => {
+    if (!unlocked) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+    }
+}, true);
+
+    const oldButton = box.querySelector('button');
+const message = box.querySelector('p');
+const choices = ['Rock', 'Paper', 'Scissors'];
+const controls = document.createElement('div');
+
+controls.style.cssText =
+    'display:flex; flex-wrap:wrap; justify-content:center; gap:12px;';
+
+oldButton.replaceWith(controls);
+
+choices.forEach((name, player) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = name;
+    button.style.cssText =
+        'padding:14px 18px; border:0; border-radius:12px; background:#0088cc; color:white;';
+
+    controls.appendChild(button);
 
     button.onclick = () => {
+        const version = ++roundVersion;
+        const computer = Math.floor(Math.random() * 3);
+
+        controls.querySelectorAll('button')
+            .forEach(b => b.disabled = true);
+
+        box.classList.remove('playing');
+        void box.offsetWidth;
+        box.classList.add('playing');
+        message.textContent = 'Rock…';
+
+        setTimeout(() => {
+            if (version === roundVersion)
+                message.textContent = 'Paper…';
+        }, 500);
+
+        setTimeout(() => {
+            if (version === roundVersion)
+                message.textContent = 'Scissors!';
+        }, 1000);
+
+        setTimeout(() => {
+            if (version !== roundVersion) return;
+            box.classList.remove('playing');
+
+            const won = (player - computer + 3) % 3 === 1;
+            const result = player === computer
+                ? 'Draw! Try again.'
+                : won ? 'You won!' : 'Computer wins. Try again.';
+
+            message.textContent =
+                `You: ${name}. Computer: ${choices[computer]}. ${result}`;
+
+            if (won) {
+                const start = document.createElement('button');
+                start.type = 'button';
+                start.textContent = 'Start coloring';
+                start.style.cssText = button.style.cssText;
+                controls.appendChild(start);
+
+                start.onclick = () => {
+                    unlocked = true;
+                    box.style.display = 'none';
+                    start.remove();
+                };
+            } else {
+                controls.querySelectorAll('button')
+                    .forEach(b => b.disabled = false);
+            }
+        }, 1500);
+    };
+});
+
+lockPage();
         button.disabled = true;
         box.classList.remove('playing');
         void box.offsetWidth;
