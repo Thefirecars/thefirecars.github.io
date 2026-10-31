@@ -2689,6 +2689,23 @@ art.addEventListener('pointerdown', event => {
     }
 }, true);
     let unlocked = false;
+    let lives = 5;
+
+const livesLabel = document.createElement('div');
+livesLabel.style.cssText =
+    'font: bold 20px sans-serif; color:white; padding:12px;';
+livesLabel.textContent = '♥ Lives: 5 / 5';
+box.prepend(livesLabel);
+
+const retryButton = document.createElement('button');
+retryButton.type = 'button';
+retryButton.textContent = 'Try again — 5 lives';
+retryButton.style.cssText =
+    'padding:14px; border:0; border-radius:12px; background:#0088cc; color:white;';
+retryButton.hidden = true;
+box.appendChild(retryButton);
+
+retryButton.onclick = () => lockPage(true);
 let roundVersion = 0;
 
 function lockPage() {
