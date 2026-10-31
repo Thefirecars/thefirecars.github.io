@@ -1287,24 +1287,41 @@ return;
             }
         );
 
-        book.pages.forEach(pageNumber => {
+book.pages.forEach(pageNumber => {
+    const unlockedThrough = window.farmsieUnlockedThrough || 1;
+    const locked = pageNumber > unlockedThrough;
 
-            createCard(
-                'Picture ' + pageNumber,
-                '🎨 Start Coloring',
-                pageImages[pageNumber],
-                () => {
+    createCard(
+        'Challenge ' + pageNumber,
+        locked
+            ? '🔒 Complete Challenge ' + (pageNumber - 1)
+            : '🎨 Start Challenge',
+        pageImages[pageNumber],
+        locked ? null : () => {
+            currentPage = pageNumber;
+            loadBookPage(pageNumber);
+            menu.hidden = true;
+        }
+    );
 
-                    currentPage = pageNumber;
+    const card = grid.lastElementChild;
 
-                    loadBookPage(pageNumber);
+    if (locked) {
+        card.style.opacity = '1';
+        card.style.cursor = 'not-allowed';
 
-                    menu.hidden = true;
+        const picture = card.querySelector('img');
+        if (picture) {
+            picture.style.filter = 'blur(8px)';
+        }
 
-                }
-            );
-
-        });
+        card.setAttribute(
+            'aria-label',
+            'Challenge ' + pageNumber + ' locked. Complete Challenge '
+                + (pageNumber - 1) + ' first.'
+        );
+    }
+});
     }
 
     // Begin at the category selection screen.
