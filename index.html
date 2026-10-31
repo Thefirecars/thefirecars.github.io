@@ -440,6 +440,7 @@ data-color="rgba(93,64,55,255)">
         }
 
         function loadBookPage(num) {
+            window.farmsieCanPaint = false;
             window.farmsieLockChallenge?.();
             const generation = ++pageLoadGeneration;
             pageReady = false;
