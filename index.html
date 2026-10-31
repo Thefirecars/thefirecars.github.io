@@ -2681,20 +2681,6 @@ choices.forEach((name, player) => {
 });
 
 lockPage();
-        button.disabled = true;
-        box.classList.remove('playing');
-        void box.offsetWidth;
-        box.classList.add('playing');
-        message.textContent = 'Rock…';
-
-        setTimeout(() => message.textContent = 'Paper…', 500);
-        setTimeout(() => message.textContent = 'Scissors!', 1000);
-        setTimeout(() => {
-            box.classList.remove('playing');
-            message.textContent = 'Animation finished!';
-            button.disabled = false;
-        }, 1500);
-    };
 })();
 </script>
 </html>
