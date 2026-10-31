@@ -2666,8 +2666,49 @@ function updateColoringClock() {
 
     timerBar.value = seconds;
 
-    if (seconds === 0) {
-        
+        if (seconds === 0) {
+        lockPage();
+        message.textContent =
+            'Time is up! Win another round for 3 more minutes.';
+    }
+}
+
+function startColoringClock() {
+    clearInterval(coloringClock);
+    coloringDeadline = Date.now() + 180000;
+    timerBox.style.display = 'block';
+    updateColoringClock();
+    coloringClock = setInterval(updateColoringClock, 250);
+}
+
+let unlocked = false;
+let roundVersion = 0;
+let lives = 5;
+
+const livesLabel = document.createElement('div');
+livesLabel.style.cssText =
+    'font:bold 20px sans-serif; color:white; padding:12px;';
+livesLabel.textContent = '♥ Lives: 5 / 5';
+box.prepend(livesLabel);
+
+const retryButton = document.createElement('button');
+retryButton.type = 'button';
+retryButton.textContent = 'Try again — 5 lives';
+retryButton.style.cssText =
+    'padding:14px; border:0; border-radius:12px; background:#0088cc; color:white;';
+retryButton.hidden = true;
+box.appendChild(retryButton);
+
+retryButton.onclick = () => lockPage(true);
+
+art.addEventListener('pointerdown', event => {
+    if (coloringDeadline && Date.now() >= coloringDeadline) {
+        updateColoringClock();
+        event.preventDefault();
+        event.stopImmediatePropagation();
+    }
+}, true);
+
 function lockPage(resetLives = false) {
     clearInterval(coloringClock);
     coloringClock = null;
