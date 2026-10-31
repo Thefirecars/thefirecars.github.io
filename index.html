@@ -2772,8 +2772,24 @@ choices.forEach((name, player) => {
     startColoringClock();
 };
             } else {
-                controls.querySelectorAll('button')
-                    .forEach(b => b.disabled = false);
+    // A draw costs nothing. A loss costs one life.
+    if (player !== computer) {
+        lives = Math.max(0, lives - 1);
+    }
+
+    livesLabel.textContent = '♥ Lives: ' + lives + ' / 5';
+
+    if (lives === 0) {
+        window.farmsieCanPaint = false;
+        unlocked = false;
+        controls.style.display = 'none';
+        retryButton.hidden = false;
+        message.textContent =
+            'Game Over! No lives left. Your coloring is kept.';
+    } else {
+        controls.querySelectorAll('button')
+            .forEach(b => b.disabled = false);
+    }
             }
         }, 1500);
     };
