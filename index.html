@@ -440,6 +440,14 @@ data-color="rgba(93,64,55,255)">
         }
 
         function loadBookPage(num) {
+            const unlockedThrough = window.farmsieUnlockedThrough || 1;
+
+if (num > unlockedThrough) {
+    alert('Complete Challenge ' + (num - 1) + ' first.');
+    num = unlockedThrough;
+}
+
+currentPage = num;
             window.farmsieCanPaint = false;
             window.farmsieLockChallenge?.();
             const generation = ++pageLoadGeneration;
