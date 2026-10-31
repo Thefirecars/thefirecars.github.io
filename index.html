@@ -440,10 +440,15 @@ data-color="rgba(93,64,55,255)">
         }
 
         function loadBookPage(num) {
-            const unlockedThrough = window.farmsieUnlockedThrough || 1;
+            const category = num <= 4 ? 'faith' : 'animals';
+const firstPage = category === 'faith' ? 1 : 5;
+
+const unlockedThrough =
+    window.farmsieUnlockedByCategory?.[category]
+    ?? firstPage;
 
 if (num > unlockedThrough) {
-    alert('Complete Challenge ' + (num - 1) + ' first.');
+    alert('Complete the earlier challenges in this collection first.');
     num = unlockedThrough;
 }
 
