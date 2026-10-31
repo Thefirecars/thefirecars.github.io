@@ -2667,61 +2667,34 @@ function updateColoringClock() {
     timerBar.value = seconds;
 
     if (seconds === 0) {
-        lockPage();
-        message.textContent =
-            'Time is up! Win another round for 3 more minutes.';
-    }
-}
-
-function startColoringClock() {
+        
+function lockPage(resetLives = false) {
     clearInterval(coloringClock);
-    coloringDeadline = Date.now() + 180000;
-    timerBox.style.display = 'block';
-    updateColoringClock();
-    coloringClock = setInterval(updateColoringClock, 250);
-}
+    coloringClock = null;
+    coloringDeadline = 0;
+    timerBox.style.display = 'none';
+    window.farmsieCanPaint = false;
 
-art.addEventListener('pointerdown', event => {
-    if (coloringDeadline && Date.now() >= coloringDeadline) {
-        updateColoringClock();
-        event.preventDefault();
-        event.stopImmediatePropagation();
-    }
-}, true);
-    let unlocked = false;
-    let lives = 5;
-
-const livesLabel = document.createElement('div');
-livesLabel.style.cssText =
-    'font: bold 20px sans-serif; color:white; padding:12px;';
-livesLabel.textContent = '♥ Lives: 5 / 5';
-box.prepend(livesLabel);
-
-const retryButton = document.createElement('button');
-retryButton.type = 'button';
-retryButton.textContent = 'Try again — 5 lives';
-retryButton.style.cssText =
-    'padding:14px; border:0; border-radius:12px; background:#0088cc; color:white;';
-retryButton.hidden = true;
-box.appendChild(retryButton);
-
-retryButton.onclick = () => lockPage(true);
-let roundVersion = 0;
-
-function lockPage() {
-    clearInterval(coloringClock);
-coloringClock = null;
-coloringDeadline = 0;
-timerBox.style.display = 'none';
-window.farmsieCanPaint = false;
     unlocked = false;
     roundVersion++;
+
+    if (resetLives) lives = 5;
+
+    livesLabel.textContent = '♥ Lives: ' + lives + ' / 5';
+    retryButton.hidden = true;
+
+    // Remove any leftover Start coloring button.
+    [...controls.children].slice(3).forEach(button => button.remove());
+
+    controls.style.display = 'flex';
+    controls.querySelectorAll('button')
+        .forEach(button => button.disabled = false);
+
     box.style.display = 'grid';
-    box.querySelectorAll('button').forEach(b => b.disabled = false);
-    box.querySelector('p').textContent = 'Win a round to start coloring!';
+    box.querySelector('p').textContent =
+        'Win a round to start coloring!';
     box.classList.remove('playing');
 }
-
 window.farmsieLockChallenge = lockPage;
 
 art.addEventListener('pointerdown', event => {
