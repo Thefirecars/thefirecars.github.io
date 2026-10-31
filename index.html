@@ -1300,14 +1300,19 @@ return;
             }
         );
 
-book.pages.forEach(pageNumber => {
-    const unlockedThrough = window.farmsieUnlockedThrough || 1;
+book.pages.forEach((pageNumber, index) => {
+    const firstPage = book.pages[0];
+
+    const unlockedThrough =
+        window.farmsieUnlockedByCategory?.[book.category]
+        ?? firstPage;
+
     const locked = pageNumber > unlockedThrough;
 
     createCard(
-        'Challenge ' + pageNumber,
+        'Challenge ' + (index + 1),
         locked
-            ? '🔒 Complete Challenge ' + (pageNumber - 1)
+            ? '🔒 Complete Challenge ' + index
             : '🎨 Start Challenge',
         pageImages[pageNumber],
         locked ? null : () => {
@@ -1330,8 +1335,9 @@ book.pages.forEach(pageNumber => {
 
         card.setAttribute(
             'aria-label',
-            'Challenge ' + pageNumber + ' locked. Complete Challenge '
-                + (pageNumber - 1) + ' first.'
+            'Challenge ' + (index + 1)
+                + ' locked. Complete Challenge '
+                + index + ' in this collection first.'
         );
     }
 });
