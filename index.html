@@ -2777,9 +2777,10 @@ choices.forEach((name, player) => {
                 start.onclick = () => {
     window.farmsieCanPaint = true;
     unlocked = true;
-                    box.style.display = 'none';
-                    start.remove();
-                };
+    box.style.display = 'none';
+    start.remove();
+    startColoringClock();
+};
             } else {
                 controls.querySelectorAll('button')
                     .forEach(b => b.disabled = false);
