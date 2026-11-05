@@ -2495,15 +2495,25 @@ body .farmsie-picture-card .stat-btn.liked {
 </script>
 
 <script>
-// Gentle, rate-limited painting feedback; coloring never depends on vibration.
+// Adjustable, rate-limited painting feedback; coloring never depends on vibration.
 (() => {
     const supported = typeof navigator.vibrate === 'function';
     const key = 'farmsie-paint-vibration';
-    let enabled = true;
-    try { enabled = localStorage.getItem(key) !== 'off'; } catch (_) {}
+    const levels = ['off', 'gentle', 'medium', 'strong'];
+    const labels = { off: 'Off', gentle: 'Gentle', medium: 'Medium', strong: 'Strong' };
+    let level = 'gentle';
+    try {
+        const saved = localStorage.getItem(key);
+        if (levels.includes(saved)) level = saved;
+    } catch (_) {}
     let lastPulse = -Infinity;
     let patternIndex = 0;
-    const patterns = [8, 12, 6, 10];
+    // Browsers vary pulse duration, not the motor's physical amplitude.
+    const patterns = {
+        gentle: [8, 12, 6, 10],
+        medium: [22, 30, 18, 26],
+        strong: [45, 60, 35, 50]
+    };
     const buttons = [];
     function stop() {
         if (supported) { try { navigator.vibrate(0); } catch (_) {} }
@@ -2511,18 +2521,20 @@ body .farmsie-picture-card .stat-btn.liked {
     function render() {
         buttons.forEach(button => {
             button.textContent = supported
-                ? 'Vibration: ' + (enabled ? 'On' : 'Off')
+                ? 'Vibration: ' + labels[level]
                 : 'Vibration unavailable';
-            button.setAttribute('aria-pressed', String(supported && enabled));
+            button.setAttribute('aria-label', supported
+                ? 'Vibration: ' + labels[level] + '. Tap for ' + labels[levels[(levels.indexOf(level) + 1) % levels.length]]
+                : 'Vibration unavailable');
         });
     }
     window.farmsieHaptics = {
         pulse() {
-            if (!supported || !enabled || document.hidden) return;
+            if (!supported || level === 'off' || document.hidden) return;
             const now = performance.now();
             if (now - lastPulse < 90) return;
             lastPulse = now;
-            try { navigator.vibrate(patterns[patternIndex++ % patterns.length]); } catch (_) {}
+            try { navigator.vibrate(patterns[level][patternIndex++ % patterns[level].length]); } catch (_) {}
         },
         stop
     };
@@ -2532,13 +2544,17 @@ body .farmsie-picture-card .stat-btn.liked {
         button.type = 'button';
         button.disabled = !supported;
         button.title = supported
-            ? 'Gentle vibration while painting'
+            ? 'Tap to cycle Gentle, Medium, Strong, and Off'
             : 'This browser does not support painting vibration';
         button.addEventListener('click', () => {
-            enabled = !enabled;
-            try { localStorage.setItem(key, enabled ? 'on' : 'off'); } catch (_) {}
-            if (!enabled) stop();
+            stop();
+            level = levels[(levels.indexOf(level) + 1) % levels.length];
+            patternIndex = 0;
+            lastPulse = -Infinity;
+            try { localStorage.setItem(key, level); } catch (_) {}
             render();
+            window.farmsieHaptics.pulse(); // Preview the selected level.
+
         });
         buttons.push(button);
         toolbar.appendChild(button);
