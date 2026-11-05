@@ -2515,10 +2515,46 @@ body .farmsie-picture-card .stat-btn.liked {
         strong: [45, 60, 35, 50]
     };
     const buttons = [];
+    const continuousButtons = [];
+    let continuous = false;
+    let repeatTimer = null;
+    function stopContinuous() {
+        continuous = false;
+        clearTimeout(repeatTimer);
+        repeatTimer = null;
+        stop();
+        render();
+    }
+    function runContinuous() {
+        clearTimeout(repeatTimer);
+        if (!continuous || document.hidden || level === 'off') {
+            stopContinuous();
+            return;
+        }
+        // Repeat short patterns to respect browser duration limits.
+        const pattern = level === 'strong' ? [1000]
+            : Array.from({ length: 20 }, (_, i) =>
+                i % 2 === 0 ? (level === 'gentle' ? 20 : 50)
+                            : (level === 'gentle' ? 80 : 50));
+        try {
+            if (navigator.vibrate(pattern) === false) {
+                stopContinuous();
+                return;
+            }
+        } catch (_) {
+            stopContinuous();
+            return;
+        }
+        repeatTimer = setTimeout(runContinuous, 1000);
+    }
     function stop() {
         if (supported) { try { navigator.vibrate(0); } catch (_) {} }
     }
     function render() {
+        continuousButtons.forEach(button => {
+            button.textContent = continuous ? 'Stop Vibration' : 'Start Vibration';
+            button.setAttribute('aria-pressed', String(continuous));
+        });
         buttons.forEach(button => {
             button.textContent = supported
                 ? 'Vibration: ' + labels[level]
@@ -2530,7 +2566,7 @@ body .farmsie-picture-card .stat-btn.liked {
     }
     window.farmsieHaptics = {
         pulse() {
-            if (!supported || level === 'off' || document.hidden) return;
+            if (!supported || continuous || level === 'off' || document.hidden) return;
             const now = performance.now();
             if (now - lastPulse < 90) return;
             lastPulse = now;
@@ -2553,19 +2589,38 @@ body .farmsie-picture-card .stat-btn.liked {
             lastPulse = -Infinity;
             try { localStorage.setItem(key, level); } catch (_) {}
             render();
-            window.farmsieHaptics.pulse(); // Preview the selected level.
+            if (continuous) runContinuous();
+            else window.farmsieHaptics.pulse(); // Preview the selected level.
 
         });
         buttons.push(button);
         toolbar.appendChild(button);
+        const continuousButton = document.createElement('button');
+        continuousButton.type = 'button';
+        continuousButton.disabled = !supported;
+        continuousButton.title = 'Run vibration without coloring; tap again to stop';
+        continuousButton.addEventListener('click', () => {
+            if (continuous) { stopContinuous(); return; }
+            if (level === 'off') {
+                level = 'gentle';
+                try { localStorage.setItem(key, level); } catch (_) {}
+            }
+            continuous = true;
+            render();
+            runContinuous();
+        });
+        continuousButtons.push(continuousButton);
+        toolbar.appendChild(continuousButton);
     }
     addToggle(document.getElementById('farmsie-tools'));
     addToggle(document.querySelector('.farmsie-paint-tools'));
     render();
-    document.addEventListener('pointerup', stop, true);
-    document.addEventListener('pointercancel', stop, true);
-    document.addEventListener('visibilitychange', () => { if (document.hidden) stop(); });
-    window.addEventListener('blur', stop);
+    const stopPaintingPulse = () => { if (!continuous) stop(); };
+    document.addEventListener('pointerup', stopPaintingPulse, true);
+    document.addEventListener('pointercancel', stopPaintingPulse, true);
+    document.addEventListener('visibilitychange', () => { if (document.hidden) stopContinuous(); });
+    window.addEventListener('blur', stopContinuous);
+    window.addEventListener('pagehide', stopContinuous);
 })();
 </script>
 </html>
