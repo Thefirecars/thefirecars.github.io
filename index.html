@@ -440,21 +440,7 @@ data-color="rgba(93,64,55,255)">
         }
 
         function loadBookPage(num) {
-            const category = num <= 4 ? 'faith' : 'animals';
-const firstPage = category === 'faith' ? 1 : 5;
-
-const unlockedThrough =
-    window.farmsieUnlockedByCategory?.[category]
-    ?? firstPage;
-
-if (num > unlockedThrough) {
-    alert('Complete the earlier challenges in this collection first.');
-    num = unlockedThrough;
-}
-
-currentPage = num;
-            window.farmsieCanPaint = false;
-            window.farmsieLockChallenge?.(true);
+            currentPage = num;
             const generation = ++pageLoadGeneration;
             pageReady = false;
             boundaryMask = null;
@@ -741,6 +727,7 @@ currentPage = num;
     if (!pageReady || !boundaryMask || !originalPixels) return;
     const image = ctx.getImageData(0, 0, art.width, art.height);
     const d = image.data, o = originalPixels.data;
+    let painted = false;
     const radius = Math.max(1, Number(tools.querySelector('#farmsie-brush-size').value)
       * art.width / stage.clientWidth / 2);
     const length = Math.hypot(to.x - from.x, to.y - from.y);
@@ -758,6 +745,8 @@ currentPage = num;
             d[k] = o[k]; d[k+1] = o[k+1];
             d[k+2] = o[k+2]; d[k+3] = o[k+3];
           } else {
+            if (d[k] !== selectedColor[0] || d[k+1] !== selectedColor[1] ||
+                d[k+2] !== selectedColor[2] || d[k+3] !== 255) painted = true;
             d[k] = selectedColor[0]; d[k+1] = selectedColor[1];
             d[k+2] = selectedColor[2]; d[k+3] = 255;
           }
@@ -765,6 +754,7 @@ currentPage = num;
       }
     }
     ctx.putImageData(image, 0, 0);
+    if (painted && mode === 'brush') window.farmsieHaptics?.pulse();
   }
 
   function enterPinch() {
@@ -776,10 +766,6 @@ currentPage = num;
       zoom, panX, panY, center: {x:(p[0].x+p[1].x)/2, y:(p[0].y+p[1].y)/2} };
   }
   art.addEventListener('pointerdown', e => {
-    if (window.farmsieCanPaint !== true) {
-        e.preventDefault();
-        return;
-    }
     if (!pageReady) return;
     e.preventDefault();
     art.setPointerCapture(e.pointerId);
@@ -788,11 +774,6 @@ currentPage = num;
     gesture = {p: point(e), local: local(e), start: local(e), moved: false, changed: false};
   });
   art.addEventListener('pointermove', e => {
-    if (window.farmsieCanPaint !== true) {
-      if (gesture?.changed) autoSaveCurrentPage();
-      touches.clear(); gesture = null; pinch = null;
-      return;
-    }
     if (!touches.has(e.pointerId)) return;
     e.preventDefault();
     touches.set(e.pointerId, local(e));
@@ -828,7 +809,7 @@ currentPage = num;
     }
     if (!gesture) return;
     const p = point(e);
-    if (!cancelled && window.farmsieCanPaint === true && pageReady && valid(p)) {
+    if (!cancelled && pageReady && valid(p)) {
       if (mode === 'fill' && !gesture.moved && !boundaryMask[Math.floor(p.y)*art.width+Math.floor(p.x)]) {
         beginChange();
         fillRegion(Math.floor(p.x), Math.floor(p.y), selectedColor);
@@ -1315,46 +1296,18 @@ return;
         );
 
 book.pages.forEach((pageNumber, index) => {
-    const firstPage = book.pages[0];
-
-    const unlockedThrough =
-        window.farmsieUnlockedByCategory?.[book.category]
-        ?? firstPage;
-
-    const locked = pageNumber > unlockedThrough;
-
     createCard(
-        'Challenge ' + (index + 1),
-        locked
-            ? '🔒 Complete Challenge ' + index
-            : '🎨 Start Challenge',
+        'Picture ' + (index + 1),
+        '🎨 Start Coloring',
         pageImages[pageNumber],
-        locked ? null : () => {
+        () => {
             currentPage = pageNumber;
             loadBookPage(pageNumber);
             menu.hidden = true;
         }
     );
-
-    const card = grid.lastElementChild;
-
-    if (locked) {
-        card.style.opacity = '1';
-        card.style.cursor = 'not-allowed';
-
-        const picture = card.querySelector('img');
-        if (picture) {
-            picture.style.filter = 'blur(8px)';
-        }
-
-        card.setAttribute(
-            'aria-label',
-            'Challenge ' + (index + 1)
-                + ' locked. Complete Challenge '
-                + index + ' in this collection first.'
-        );
-    }
 });
+
     }
 
     // Begin at the category selection screen.
@@ -1728,6 +1681,7 @@ book.pages.forEach((pageNumber, index) => {
     }
 
     paint.restore();
+    if (!erasing) window.farmsieHaptics?.pulse();
   }
 
   overlay.addEventListener("pointerdown", event => {
@@ -2539,358 +2493,63 @@ body .farmsie-picture-card .stat-btn.liked {
     });
 })();
 </script>
-<style>
-#farmsie-hand-test {
-    margin: 20px auto;
-    padding: 16px;
-    max-width: 360px;
-    border-radius: 14px;
-    background: #202124;
-    color: white;
-}
-
-#farmsie-hand-test .hands {
-    display: flex;
-    justify-content: space-around;
-    padding: 20px 0;
-}
-
-#farmsie-hand-test svg {
-    width: 90px;
-    height: 100px;
-}
-
-#farmsie-hand-test .opponent {
-    transform: scaleX(-1);
-}
-
-#farmsie-hand-test.playing svg {
-    animation: farmsie-hand-bounce 0.5s ease-in-out 3;
-}
-
-@keyframes farmsie-hand-bounce {
-    0%, 100% { transform: translateY(0) rotate(0); }
-    50% { transform: translateY(-20px) rotate(-10deg); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-    #farmsie-hand-test.playing svg {
-        animation: none;
-    }
-}
-</style>
 
 <script>
+// Gentle, rate-limited painting feedback; coloring never depends on vibration.
 (() => {
-    const menu = document.getElementById('farmsie-menu');
-    if (!menu || document.getElementById('farmsie-hand-test')) return;
-
-    const fist = `
-        <svg viewBox="0 0 100 110" aria-hidden="true">
-            <g fill="white" stroke="#111" stroke-width="3.5"
-               stroke-linecap="round" stroke-linejoin="round">
-                <path d="M30 102V82
-                         Q16 73 16 57V35
-                         Q16 23 27 23
-                         Q30 12 41 17
-                         Q49 8 59 17
-                         Q72 13 77 25
-                         Q88 25 88 38V62
-                         Q88 76 73 83V102Z"/>
-                <path d="M28 25V43 M42 20V42
-                         M58 20V43 M74 28V46"
-                      fill="none"/>
-                <path d="M18 52Q28 42 39 50L57 62
-                         Q62 70 54 75
-                         Q49 77 43 73L31 65"/>
-            </g>
-        </svg>`;
-
-    const box = document.createElement('section');
-    box.id = 'farmsie-hand-test';
-    box.innerHTML = `
-        <div>Rock, Paper, Scissors</div>
-        <div class="hands">
-            <div>${fist}<div>You</div></div>
-            <div><div class="opponent">${fist}</div>
-                <div>Computer</div></div>
-        </div>
-        <button type="button">Test hand animation</button>
-        <p aria-live="polite">Ready?</p>
-    `;
-
-    document.getElementById('canvas-container').appendChild(box);
-
-box.style.cssText = `
-    position: absolute;
-    inset: 0;
-    z-index: 50;
-    max-width: none;
-    margin: 0;
-    overflow-y: auto;
-    box-sizing: border-box;
-    display: grid;
-    align-content: center;
-    background: #202124;
-`;
-
-const art = document.getElementById('coloring-canvas');
-let coloringClock = null;
-let coloringDeadline = 0;
-
-const timerBox = document.createElement('div');
-timerBox.style.cssText = `
-    position: absolute;
-    top: 8px;
-    left: 12px;
-    right: 12px;
-    z-index: 49;
-    padding: 10px;
-    border-radius: 12px;
-    background: #202124;
-    color: white;
-    pointer-events: none;
-    display: none;
-`;
-
-timerBox.innerHTML = `
-    <div style="font: bold 18px sans-serif;">
-        Coloring time: <span>3:00</span>
-    </div>
-    <progress max="180" value="180"
-        aria-label="Coloring time remaining"
-        style="width:100%; height:16px; accent-color:#2ecc71;">
-    </progress>
-`;
-
-art.parentElement.appendChild(timerBox);
-
-const timerText = timerBox.querySelector('span');
-const timerBar = timerBox.querySelector('progress');
-
-function updateColoringClock() {
-    const seconds = Math.max(
-        0,
-        Math.ceil((coloringDeadline - Date.now()) / 1000)
-    );
-
-    timerText.textContent =
-        Math.floor(seconds / 60) + ':'
-        + String(seconds % 60).padStart(2, '0');
-
-    timerBar.value = seconds;
-
-        if (seconds === 0) {
-        lockPage();
-        message.textContent =
-            'Time is up! Win another round for 3 more minutes.';
+    const supported = typeof navigator.vibrate === 'function';
+    const key = 'farmsie-paint-vibration';
+    let enabled = true;
+    try { enabled = localStorage.getItem(key) !== 'off'; } catch (_) {}
+    let lastPulse = -Infinity;
+    let patternIndex = 0;
+    const patterns = [8, 12, 6, 10];
+    const buttons = [];
+    function stop() {
+        if (supported) { try { navigator.vibrate(0); } catch (_) {} }
     }
-}
-
-function startColoringClock() {
-    clearInterval(coloringClock);
-    coloringDeadline = Date.now() + 180000;
-    timerBox.style.display = 'block';
-    updateColoringClock();
-    coloringClock = setInterval(updateColoringClock, 250);
-}
-
-let unlocked = false;
-let roundVersion = 0;
-let lives = 5;
-let gameOver = false;
-
-const livesLabel = document.createElement('div');
-livesLabel.style.cssText =
-    'font:bold 20px sans-serif; color:white; padding:12px;';
-livesLabel.textContent = '♥ Lives: 5 / 5';
-box.prepend(livesLabel);
-
-const retryButton = document.createElement('button');
-retryButton.type = 'button';
-retryButton.textContent = 'Try Again — 5 Lives';
-retryButton.id = 'farmsie-retry';
-retryButton.style.cssText =
-    'padding:14px; border:0; border-radius:12px; background:#0088cc; color:white;';
-retryButton.hidden = true;
-box.appendChild(retryButton);
-
-const gameOverTitle = document.createElement('h2');
-gameOverTitle.id = 'farmsie-game-over-title';
-gameOverTitle.textContent = 'Game Over';
-gameOverTitle.style.cssText =
-    'font:bold 36px sans-serif; color:#ff8585; margin:12px 0; text-align:center;';
-gameOverTitle.hidden = true;
-box.prepend(gameOverTitle);
-
-function showGameOver() {
-    gameOver = true;
-    unlocked = false;
-    window.farmsieCanPaint = false;
-    roundVersion++;
-    clearInterval(coloringClock);
-    coloringClock = null;
-    coloringDeadline = 0;
-    timerBox.style.display = 'none';
-    box.classList.remove('playing');
-    box.style.display = 'grid';
-    box.querySelector('.hands').style.display = 'none';
-    gameOverTitle.hidden = false;
-    controls.style.display = 'none';
-    controls.querySelectorAll('button').forEach(button => button.disabled = true);
-    livesLabel.textContent = '♥ Lives: 0 / 5';
-    message.textContent = 'No lives left. Your coloring is kept. Tap Try Again for 5 new lives.';
-    retryButton.hidden = false;
-    retryButton.focus({ preventScroll: true });
-}
-
-retryButton.onclick = () => {
-    lockPage(true);
-    controls.querySelector('button').focus({ preventScroll: true });
-};
-
-art.addEventListener('pointerdown', event => {
-    if (coloringDeadline && Date.now() >= coloringDeadline) {
-        updateColoringClock();
-        event.preventDefault();
-        event.stopImmediatePropagation();
+    function render() {
+        buttons.forEach(button => {
+            button.textContent = supported
+                ? 'Vibration: ' + (enabled ? 'On' : 'Off')
+                : 'Vibration unavailable';
+            button.setAttribute('aria-pressed', String(supported && enabled));
+        });
     }
-}, true);
-
-function lockPage(resetLives = false) {
-    clearInterval(coloringClock);
-    coloringClock = null;
-    coloringDeadline = 0;
-    timerBox.style.display = 'none';
-    window.farmsieCanPaint = false;
-
-    unlocked = false;
-    roundVersion++;
-
-    if (resetLives) {
-        lives = 5;
-        gameOver = false;
-    }
-    if (gameOver || lives === 0) {
-        showGameOver();
-        return;
-    }
-    gameOverTitle.hidden = true;
-    box.querySelector('.hands').style.display = '';
-
-    livesLabel.textContent = '♥ Lives: ' + lives + ' / 5';
-    retryButton.hidden = true;
-
-    // Remove any leftover Start coloring button.
-    [...controls.children].slice(3).forEach(button => button.remove());
-
-    controls.style.display = 'flex';
-    controls.querySelectorAll('button')
-        .forEach(button => button.disabled = false);
-
-    box.style.display = 'grid';
-    box.querySelector('p').textContent =
-        'Win a round to start coloring!';
-    box.classList.remove('playing');
-}
-window.farmsieLockChallenge = lockPage;
-
-art.addEventListener('pointerdown', event => {
-    if (!unlocked) {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-    }
-}, true);
-
-    const oldButton = box.querySelector('button');
-const message = box.querySelector('p');
-const choices = ['Rock', 'Paper', 'Scissors'];
-const controls = document.createElement('div');
-
-controls.style.cssText =
-    'display:flex; flex-wrap:wrap; justify-content:center; gap:12px;';
-
-oldButton.replaceWith(controls);
-
-choices.forEach((name, player) => {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.textContent = name;
-    button.style.cssText =
-        'padding:14px 18px; border:0; border-radius:12px; background:#0088cc; color:white;';
-
-    controls.appendChild(button);
-
-    button.onclick = () => {
-        if (gameOver || lives === 0 || button.disabled) return;
-        const version = ++roundVersion;
-        const computer = Math.floor(Math.random() * 3);
-
-        controls.querySelectorAll('button')
-            .forEach(b => b.disabled = true);
-
-        box.classList.remove('playing');
-        void box.offsetWidth;
-        box.classList.add('playing');
-        message.textContent = 'Rock…';
-
-        setTimeout(() => {
-            if (version === roundVersion)
-                message.textContent = 'Paper…';
-        }, 500);
-
-        setTimeout(() => {
-            if (version === roundVersion)
-                message.textContent = 'Scissors!';
-        }, 1000);
-
-        setTimeout(() => {
-            if (version !== roundVersion) return;
-            box.classList.remove('playing');
-
-            const won = (player - computer + 3) % 3 === 1;
-            const result = player === computer
-                ? 'Draw! Try again.'
-                : won ? 'You won!' : 'Computer wins. Try again.';
-
-            message.textContent =
-                `You: ${name}. Computer: ${choices[computer]}. ${result}`;
-
-            if (won) {
-                const start = document.createElement('button');
-                start.type = 'button';
-                start.textContent = 'Start coloring';
-                start.style.cssText = button.style.cssText;
-                controls.appendChild(start);
-
-                start.onclick = () => {
-    if (gameOver || lives === 0 || version !== roundVersion) return;
-    window.farmsieCanPaint = true;
-    unlocked = true;
-    box.style.display = 'none';
-    start.remove();
-    startColoringClock();
-};
-            } else {
-    // A draw costs nothing. A loss costs one life.
-    if (player !== computer) {
-        lives = Math.max(0, lives - 1);
-    }
-
-    livesLabel.textContent = '♥ Lives: ' + lives + ' / 5';
-
-    if (lives === 0) {
-        showGameOver();
-    } else {
-        controls.querySelectorAll('button')
-            .forEach(b => b.disabled = false);
-    }
-            }
-        }, 1500);
+    window.farmsieHaptics = {
+        pulse() {
+            if (!supported || !enabled || document.hidden) return;
+            const now = performance.now();
+            if (now - lastPulse < 90) return;
+            lastPulse = now;
+            try { navigator.vibrate(patterns[patternIndex++ % patterns.length]); } catch (_) {}
+        },
+        stop
     };
-});
-
-lockPage();
+    function addToggle(toolbar) {
+        if (!toolbar) return;
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.disabled = !supported;
+        button.title = supported
+            ? 'Gentle vibration while painting'
+            : 'This browser does not support painting vibration';
+        button.addEventListener('click', () => {
+            enabled = !enabled;
+            try { localStorage.setItem(key, enabled ? 'on' : 'off'); } catch (_) {}
+            if (!enabled) stop();
+            render();
+        });
+        buttons.push(button);
+        toolbar.appendChild(button);
+    }
+    addToggle(document.getElementById('farmsie-tools'));
+    addToggle(document.querySelector('.farmsie-paint-tools'));
+    render();
+    document.addEventListener('pointerup', stop, true);
+    document.addEventListener('pointercancel', stop, true);
+    document.addEventListener('visibilitychange', () => { if (document.hidden) stop(); });
+    window.addEventListener('blur', stop);
 })();
 </script>
 </html>
