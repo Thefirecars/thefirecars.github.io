@@ -788,6 +788,11 @@ currentPage = num;
     gesture = {p: point(e), local: local(e), start: local(e), moved: false, changed: false};
   });
   art.addEventListener('pointermove', e => {
+    if (window.farmsieCanPaint !== true) {
+      if (gesture?.changed) autoSaveCurrentPage();
+      touches.clear(); gesture = null; pinch = null;
+      return;
+    }
     if (!touches.has(e.pointerId)) return;
     e.preventDefault();
     touches.set(e.pointerId, local(e));
@@ -823,7 +828,7 @@ currentPage = num;
     }
     if (!gesture) return;
     const p = point(e);
-    if (!cancelled && pageReady && valid(p)) {
+    if (!cancelled && window.farmsieCanPaint === true && pageReady && valid(p)) {
       if (mode === 'fill' && !gesture.moved && !boundaryMask[Math.floor(p.y)*art.width+Math.floor(p.x)]) {
         beginChange();
         fillRegion(Math.floor(p.x), Math.floor(p.y), selectedColor);
@@ -2693,6 +2698,7 @@ function startColoringClock() {
 let unlocked = false;
 let roundVersion = 0;
 let lives = 5;
+let gameOver = false;
 
 const livesLabel = document.createElement('div');
 livesLabel.style.cssText =
@@ -2702,13 +2708,46 @@ box.prepend(livesLabel);
 
 const retryButton = document.createElement('button');
 retryButton.type = 'button';
-retryButton.textContent = 'Try again — 5 lives';
+retryButton.textContent = 'Try Again — 5 Lives';
+retryButton.id = 'farmsie-retry';
 retryButton.style.cssText =
     'padding:14px; border:0; border-radius:12px; background:#0088cc; color:white;';
 retryButton.hidden = true;
 box.appendChild(retryButton);
 
-retryButton.onclick = () => lockPage(true);
+const gameOverTitle = document.createElement('h2');
+gameOverTitle.id = 'farmsie-game-over-title';
+gameOverTitle.textContent = 'Game Over';
+gameOverTitle.style.cssText =
+    'font:bold 36px sans-serif; color:#ff8585; margin:12px 0; text-align:center;';
+gameOverTitle.hidden = true;
+box.prepend(gameOverTitle);
+
+function showGameOver() {
+    gameOver = true;
+    unlocked = false;
+    window.farmsieCanPaint = false;
+    roundVersion++;
+    clearInterval(coloringClock);
+    coloringClock = null;
+    coloringDeadline = 0;
+    timerBox.style.display = 'none';
+    box.classList.remove('playing');
+    box.style.display = 'grid';
+    box.querySelector('.hands').style.display = 'none';
+    gameOverTitle.hidden = false;
+    controls.style.display = 'none';
+    controls.querySelectorAll('button').forEach(button => button.disabled = true);
+    livesLabel.textContent = '♥ Lives: 0 / 5';
+    message.textContent = 'No lives left. Your coloring is kept. Tap Try Again for 5 new lives.';
+    retryButton.hidden = false;
+    retryButton.focus({ preventScroll: true });
+}
+
+retryButton.onclick = () => {
+    lockPage(true);
+    controls.querySelector('button').focus({ preventScroll: true });
+};
 
 art.addEventListener('pointerdown', event => {
     if (coloringDeadline && Date.now() >= coloringDeadline) {
@@ -2728,7 +2767,16 @@ function lockPage(resetLives = false) {
     unlocked = false;
     roundVersion++;
 
-    if (resetLives) lives = 5;
+    if (resetLives) {
+        lives = 5;
+        gameOver = false;
+    }
+    if (gameOver || lives === 0) {
+        showGameOver();
+        return;
+    }
+    gameOverTitle.hidden = true;
+    box.querySelector('.hands').style.display = '';
 
     livesLabel.textContent = '♥ Lives: ' + lives + ' / 5';
     retryButton.hidden = true;
@@ -2774,6 +2822,7 @@ choices.forEach((name, player) => {
     controls.appendChild(button);
 
     button.onclick = () => {
+        if (gameOver || lives === 0 || button.disabled) return;
         const version = ++roundVersion;
         const computer = Math.floor(Math.random() * 3);
 
@@ -2815,6 +2864,7 @@ choices.forEach((name, player) => {
                 controls.appendChild(start);
 
                 start.onclick = () => {
+    if (gameOver || lives === 0 || version !== roundVersion) return;
     window.farmsieCanPaint = true;
     unlocked = true;
     box.style.display = 'none';
@@ -2830,12 +2880,7 @@ choices.forEach((name, player) => {
     livesLabel.textContent = '♥ Lives: ' + lives + ' / 5';
 
     if (lives === 0) {
-        window.farmsieCanPaint = false;
-        unlocked = false;
-        controls.style.display = 'none';
-        retryButton.hidden = false;
-        message.textContent =
-            'Game Over! No lives left. Your coloring is kept.';
+        showGameOver();
     } else {
         controls.querySelectorAll('button')
             .forEach(b => b.disabled = false);
