@@ -1,14 +1,23 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<script>window.FarmsieFiles=(()=>{
+ const enc=new TextEncoder();
+ function download(blob,name){if(!blob)throw Error('Could not create file');const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);}
+ function blob(canvas){return new Promise((resolve,reject)=>{try{canvas.toBlob(b=>b?resolve(b):reject(Error('Could not export picture')),'image/png');}catch(e){reject(e);}});}
+ function pdf(canvas){const white=document.createElement('canvas');white.width=canvas.width;white.height=canvas.height;const c=white.getContext('2d');c.fillStyle='#fff';c.fillRect(0,0,white.width,white.height);c.drawImage(canvas,0,0);const binary=atob(white.toDataURL('image/jpeg',.95).split(',')[1]),jpeg=Uint8Array.from(binary,ch=>ch.charCodeAt(0));const scale=Math.min(540/canvas.width,720/canvas.height),w=canvas.width*scale,h=canvas.height*scale,cmd=`q ${w} 0 0 ${h} ${(612-w)/2} ${(792-h)/2} cm /Im0 Do Q`;const parts=[],offsets=[0];let size=0;const add=x=>{const b=typeof x==='string'?enc.encode(x):x;parts.push(b);size+=b.length;};add('%PDF-1.4\n');const object=(id,body)=>{offsets[id]=size;add(`${id} 0 obj\n${body}\nendobj\n`);};object(1,'<< /Type /Catalog /Pages 2 0 R >>');object(2,'<< /Type /Pages /Kids [3 0 R] /Count 1 >>');object(3,'<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>');offsets[4]=size;add(`4 0 obj\n<< /Type /XObject /Subtype /Image /Width ${canvas.width} /Height ${canvas.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpeg.length} >>\nstream\n`);add(jpeg);add('\nendstream\nendobj\n');object(5,`<< /Length ${enc.encode(cmd).length} >>\nstream\n${cmd}\nendstream`);const xref=size;add('xref\n0 6\n0000000000 65535 f \n');for(let i=1;i<6;i++)add(String(offsets[i]).padStart(10,'0')+' 00000 n \n');add(`trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`);return new Blob(parts,{type:'application/pdf'});}
+ function db(){return new Promise((resolve,reject)=>{const r=indexedDB.open('farmsie-user-images',1);r.onupgradeneeded=()=>r.result.createObjectStore('images');r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});}
+ async function put(key,value){const d=await db();try{return await new Promise((resolve,reject)=>{const t=d.transaction('images','readwrite');t.objectStore('images').put(value,key);t.oncomplete=resolve;t.onerror=()=>reject(t.error);t.onabort=()=>reject(t.error);});}finally{d.close();}}
+ async function get(key){const d=await db();try{return await new Promise((resolve,reject)=>{const t=d.transaction('images'),r=t.objectStore('images').get(key);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});}finally{d.close();}}
+ async function send(canvas){const b=await blob(canvas);await put('custom',b);location.href='jigsaw.html?from=artwork';}
+ return {download,blob,pdf,put,get,send};
+})();
+</script>
     <script defer src="https://cloud.umami.is/script.js"
       data-website-id="717b10e6-44eb-4489-9562-24b593f53ab1"></script>
 
     <style>
-#save-picture-btn,
-#farmsie-paint-save {
-    display: none !important;
-}
+
 .stats-bar { display:flex; justify-content:space-between; width:100%; padding:6px 4px 2px; font-size:12px; }
 .stat-btn { background:none; border:none; font-size:12px; }
 .stat-btn.liked { color:#FF3B30; }
@@ -243,7 +252,15 @@ body .farmsie-picture-card span {
 #farmsie-menu .farmsie-billboard-collections button:focus-visible {outline:3px solid #fff;outline-offset:3px;}
 @media(min-width:700px){.farmsie-billboard-collections {grid-template-columns:repeat(4,minmax(0,1fr));}}
 </style>
-</head>
+<style>
+body > footer {display:flex;flex-wrap:wrap;gap:8px;padding:10px;height:116px;z-index:21;}
+body > footer .action-btn {flex:1 1 40%!important;width:auto!important;min-height:44px;font-size:15px!important;padding:10px!important;}
+#art-export-status {display:none;}
+#make-page-jigsaw {flex-basis:100%!important;}
+body #palette-container {bottom:126px;}
+body #farmsie-tools {bottom:202px;}
+body #canvas-container {bottom:260px;}
+</style></head>
 <body>
     <header>
         <button class="nav-btn" onclick="changePage(-1)">◀ Prev</button>
@@ -298,8 +315,8 @@ data-color="rgba(93,64,55,255)">
     </div>
 
     <footer>
-        <button class="action-btn" id="save-picture-btn">Save Picture ⬇</button>
-        <button class="action-btn" id="buy-premium-btn">Get More Books! ✨</button>
+        <button class="action-btn" id="save-picture-btn">⬇ Save PNG</button><button class="action-btn" id="save-page-pdf">📄 Save PDF</button><button class="action-btn" id="make-page-jigsaw">🧩 Make this a jigsaw</button>
+        <p id="art-export-status" role="status" style="font:13px system-ui;color:white;margin:4px"></p>
     </footer>
 
     <script>
@@ -617,17 +634,29 @@ data-color="rgba(93,64,55,255)">
             }, 'image/png');
         });
 
-        document.getElementById('buy-premium-btn').addEventListener('click', () => {
-            if (tg) {
-                tg.openLink('https://gumroad.com');
-            } else {
-                window.open('https://gumroad.com', '_blank');
-            }
-        });
+        document.getElementById('save-page-pdf').onclick = () => {
+            if (!pageReady) return alert('Wait for the picture to finish loading.');
+            try { FarmsieFiles.download(FarmsieFiles.pdf(canvas), `Farmsie-Page-${currentPage}.pdf`); }
+            catch { alert('Could not download. Try opening Farmsie in your browser.'); }
+        };
+        document.getElementById('make-page-jigsaw').onclick = async () => {
+            if (!pageReady) return alert('Wait for the picture to finish loading.');
+            const button = document.getElementById('make-page-jigsaw');
+            button.disabled = true;
+            try { autoSaveCurrentPage(); await FarmsieFiles.send(canvas); }
+            catch { alert('Could not transfer the picture. Save PNG, then choose that image in Jigsaw.'); }
+            finally { button.disabled = false; }
+        };
 
         loadBookPage(currentPage);
     </script>
-<!-- FARMSIE STEP 6: Paste this whole block AFTER the existing </script> and BEFORE </body> -->
+<!-- FARMSIE STEP 6: Paste this whole block AFTER the existing </script> and BEFORE <script>
+(() => {
+const save=document.getElementById('farmsie-paint-save');if(!save)return;
+function combined(){const bg=document.getElementById('farmsie-paint-background'),fg=document.getElementById('farmsie-paint-overlay'),c=document.createElement('canvas');c.width=bg.width;c.height=bg.height;const ctx=c.getContext('2d');ctx.fillStyle='white';ctx.fillRect(0,0,c.width,c.height);ctx.drawImage(bg,0,0);ctx.drawImage(fg,0,0);return c;}
+for(const [label,action] of [['Save PDF',()=>FarmsieFiles.download(FarmsieFiles.pdf(combined()),'Farmsie-My-Artwork.pdf')],['Make this a jigsaw',()=>FarmsieFiles.send(combined())]]) {const b=document.createElement('button');b.textContent=label;b.onclick=async()=>{b.disabled=true;try{await action();}catch{alert('Could not export. Try Save Picture and upload it in Jigsaw.');}finally{b.disabled=false;}};save.after(b);}
+})();
+</script></body> -->
 <style>
   #farmsie-tools {
     position: fixed; left: 0; right: 0; bottom: 146px; z-index: 20;
@@ -1167,8 +1196,8 @@ homeTitle.style.fontSize = 'clamp(44px, 12vw, 68px)';
     grid.appendChild(wordSearch);
     for (const [href, title, description] of [
         ['activities.html?v=3#memory', '🐾 Memory Match', 'Find matching pairs · Animals, food & space'],
-        ['jigsaw.html?v=2', '🧩 Coloring-page Jigsaws', 'Connect your coloring pictures · 9 to 64 pieces'],
-        ['printables.html', '📄 Free Printables', 'Download coloring PDFs · Single pages or the 11-page collection']
+        ['jigsaw.html?v=3', '🧩 Coloring-page Jigsaws', 'Use your coloring or upload any picture · 9 to 64 pieces']
+
     ]) {
         const activity = document.createElement('a');
         activity.href = href;
@@ -2274,7 +2303,13 @@ book.pages.forEach((pageNumber, index) => {
   <p>More languages coming soon!</p>
 
 </section>
-</body>
+<script>
+(() => {
+const save=document.getElementById('farmsie-paint-save');if(!save)return;
+function combined(){const bg=document.getElementById('farmsie-paint-background'),fg=document.getElementById('farmsie-paint-overlay'),c=document.createElement('canvas');c.width=bg.width;c.height=bg.height;const ctx=c.getContext('2d');ctx.fillStyle='white';ctx.fillRect(0,0,c.width,c.height);ctx.drawImage(bg,0,0);ctx.drawImage(fg,0,0);return c;}
+for(const [label,action] of [['Save PDF',()=>FarmsieFiles.download(FarmsieFiles.pdf(combined()),'Farmsie-My-Artwork.pdf')],['Make this a jigsaw',()=>FarmsieFiles.send(combined())]]) {const b=document.createElement('button');b.textContent=label;b.onclick=async()=>{b.disabled=true;try{await action();}catch{alert('Could not export. Try Save Picture and upload it in Jigsaw.');}finally{b.disabled=false;}};save.after(b);}
+})();
+</script></body>
 <style>
 body #farmsie-tools button,
 body #farmsie-tools label,
