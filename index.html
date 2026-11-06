@@ -1166,8 +1166,8 @@ homeTitle.style.fontSize = 'clamp(44px, 12vw, 68px)';
     wordSearch.innerHTML = '🔎 Word Search <span style="display:block;font-size:15px;font-weight:400;margin-top:8px">12 topics · 420 words · Sound & vibration · Play →</span>';
     grid.appendChild(wordSearch);
     for (const [href, title, description] of [
-        ['activities.html#memory', '🐾 Memory Match', 'Find matching pairs · Animals, food & space'],
-        ['activities.html#slide', '🧩 Sliding Puzzle', 'Slide the tiles into order · Two difficulty levels']
+        ['activities.html?v=3#memory', '🐾 Memory Match', 'Find matching pairs · Animals, food & space'],
+        ['activities.html?v=3#slide', '🧩 Sliding Puzzle', 'Slide the tiles into order · Two difficulty levels']
     ]) {
         const activity = document.createElement('a');
         activity.href = href;
