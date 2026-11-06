@@ -285,7 +285,7 @@ data-color="rgba(93,64,55,255)">
         const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
         let currentPage = 1;
-        const totalPages = 12;
+        const totalPages = 23;
         const pageImages = {
     1: 'page1.png.png',
     2: 'page2.png.png',
@@ -298,7 +298,18 @@ data-color="rgba(93,64,55,255)">
     9: 'file_0000000094e481fda213fff909ca8e1a.png',
     10: 'file_00000000aeac81fd81d205f864f7cc03.png',
     11: 'file_00000000cbe081fdaed85612dcddcc47.png',
-    12: 'file_00000000f66482308954ca8226960577.png'
+    12: 'file_00000000f66482308954ca8226960577.png',
+    13: 'animal-otter-cafe.png',
+    14: 'nature-waterfall.png',
+    15: 'nature-forest-stream.png',
+    16: 'nature-flower-garden.png',
+    17: 'gum-01-factory.png',
+    18: 'gum-02-ingredients.png',
+    19: 'gum-03-mixing.png',
+    20: 'gum-04-rolling.png',
+    21: 'gum-05-cooling.png',
+    22: 'gum-06-wrapping.png',
+    23: 'gum-07-finale.png'
 };
         let selectedColor = [255, 59, 48, 255];
         const baseImage = new Image();
@@ -1030,8 +1041,9 @@ data-color="rgba(93,64,55,255)">
     // Categories available now or planned for later.
     const categories = [
         { id: 'faith', name: '✝️ Faith & Farm' },
-        { id: 'animals', name: '🐮 Farm Animals' },
-        { id: 'nature', name: '🌻 Nature & Gardens' }
+        { id: 'animals', name: '🐮 Animals' },
+        { id: 'nature', name: '🌻 Nature & Gardens' },
+        { id: 'gum', name: '🍬 Gum Factory' }
     ];
 
     // Our first real coloring book.
@@ -1044,7 +1056,17 @@ data-color="rgba(93,64,55,255)">
     {
         title: 'Animal Adventures',
         category: 'animals',
-        pages: [5, 6, 7, 8, 9, 10, 11, 12]
+        pages: [5, 6, 7, 8, 9, 10, 11, 12, 13]
+    },
+    {
+        title: 'Nature & Gardens',
+        category: 'nature',
+        pages: [14, 15, 16]
+    },
+    {
+        title: 'Gum Factory Adventure',
+        category: 'gum',
+        pages: [17, 18, 19, 20, 21, 22, 23]
     }
 ];
 
