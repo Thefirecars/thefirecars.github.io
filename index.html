@@ -2806,3 +2806,54 @@ body .farmsie-picture-card .stat-btn.liked {
 })();
 </script>
 </html>
+
+<!-- Responsive coloring dock: keep tools above the export buttons. -->
+<style id="farmsie-responsive-dock">
+body > footer {
+ display:grid;grid-template-columns:1fr 1fr 1.4fr;align-items:stretch;
+ height:auto;min-height:62px;gap:6px;padding:7px 8px calc(7px + env(safe-area-inset-bottom,0px));
+ z-index:31;
+}
+body > footer .action-btn {
+ width:100%!important;min-width:0;min-height:48px;margin:0;
+ padding:7px 5px!important;font:700 13px/1.25 system-ui,sans-serif!important;
+ white-space:normal;text-shadow:none!important;box-shadow:none;
+ border-radius:12px;
+}
+body > footer #art-export-status {display:none;}
+body #farmsie-tools {
+ bottom:var(--farmsie-export-height,70px);z-index:30;
+ display:flex;flex-wrap:wrap;align-items:center;gap:6px;
+ max-height:28vh;overflow-y:auto;overflow-x:hidden;
+ padding:8px;scrollbar-width:thin;
+}
+body #farmsie-tools button,body #farmsie-tools summary {
+ min-height:44px;padding:9px 12px;font:700 14px/1.25 system-ui,sans-serif;
+ text-shadow:none!important;white-space:nowrap;
+}
+body #farmsie-tools .farmsie-tool-panel {flex:0 0 auto;}
+body #farmsie-tools .farmsie-panel-content {
+ bottom:var(--farmsie-dock-height,210px);max-height:40vh;z-index:650;
+}
+body #canvas-container {bottom:var(--farmsie-dock-height,210px);}
+body.farmsie-tools-hidden #farmsie-tools {display:none;}
+@media(min-width:800px){body #farmsie-tools{justify-content:center;}}
+</style>
+<script>
+(() => {
+ const footer=document.querySelector('body > footer'),tools=document.getElementById('farmsie-tools');
+ if(!footer||!tools)return;
+ function arrange(){
+  const exportHeight=Math.ceil(footer.getBoundingClientRect().height);
+  const toolHeight=Math.ceil(tools.getBoundingClientRect().height);
+  document.documentElement.style.setProperty('--farmsie-export-height',(exportHeight+6)+'px');
+  document.documentElement.style.setProperty('--farmsie-dock-height',(exportHeight+toolHeight+12)+'px');
+ }
+ if(window.ResizeObserver){const observer=new ResizeObserver(arrange);observer.observe(footer);observer.observe(tools);}
+ const observer=new MutationObserver(arrange);observer.observe(document.body,{attributes:true,attributeFilter:['class']});
+ window.addEventListener('resize',arrange);
+ if(window.visualViewport)window.visualViewport.addEventListener('resize',arrange);
+ if(document.fonts)document.fonts.ready.then(arrange);
+ arrange();
+})();
+</script>
