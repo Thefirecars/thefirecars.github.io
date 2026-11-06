@@ -1192,11 +1192,11 @@ homeTitle.style.fontSize = 'clamp(44px, 12vw, 68px)';
     const wordSearch = document.createElement('a');
     wordSearch.href = 'word-search.html';
     wordSearch.style.cssText = 'display:block;grid-column:1/-1;background:#174b3c;color:white;padding:22px;border-radius:18px;text-decoration:none;margin-bottom:16px;font:700 24px system-ui;';
-    wordSearch.innerHTML = '🔎 Word Search <span style="display:block;font-size:15px;font-weight:400;margin-top:8px">12 topics · 420 words · Sound & vibration · Play →</span>';
+    wordSearch.innerHTML = '🔎 Word Search <span style="display:block;font-size:15px;font-weight:400;margin-top:8px">12 topics · Up to 30 words per puzzle · Sound & vibration · Play →</span>';
     grid.appendChild(wordSearch);
     for (const [href, title, description] of [
         ['activities.html?v=3#memory', '🐾 Memory Match', 'Find matching pairs · Animals, food & space'],
-        ['jigsaw.html?v=3', '🧩 Coloring-page Jigsaws', 'Use your coloring or upload any picture · 9 to 64 pieces']
+        ['jigsaw.html?v=3', '🧩 Coloring-page Jigsaws', 'Use your coloring or upload any picture · 9 to 1,000 pieces']
 
     ]) {
         const activity = document.createElement('a');
