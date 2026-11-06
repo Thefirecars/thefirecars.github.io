@@ -1160,6 +1160,12 @@ function showCategories() {
     const homeTitle = menu.querySelector('h2');
 homeTitle.style.fontSize = 'clamp(44px, 12vw, 68px)';
 
+    const wordSearch = document.createElement('a');
+    wordSearch.href = 'word-search.html';
+    wordSearch.style.cssText = 'display:block;grid-column:1/-1;background:#174b3c;color:white;padding:22px;border-radius:18px;text-decoration:none;margin-bottom:16px;font:700 24px system-ui;';
+    wordSearch.innerHTML = '🔎 Word Search <span style="display:block;font-size:15px;font-weight:400;margin-top:8px">Food, travel, sports, space & everyday life · Play →</span>';
+    grid.appendChild(wordSearch);
+
     const billboard = document.createElement('section');
     billboard.className = 'farmsie-billboard';
     billboard.setAttribute('aria-label', 'Available coloring collections');
