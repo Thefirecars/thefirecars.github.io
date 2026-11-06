@@ -311,6 +311,7 @@ data-color="rgba(93,64,55,255)">
     22: 'gum-06-wrapping.png',
     23: 'gum-07-finale.png'
 };
+        const pageDetails = {"1": {"name": "Jesus & Faith — Picture 1", "tags": "jesus faith farm"}, "2": {"name": "Jesus & Faith — Picture 2", "tags": "jesus faith farm"}, "3": {"name": "Jesus & Faith — Picture 3", "tags": "jesus faith farm"}, "4": {"name": "Jesus & Faith — Picture 4", "tags": "jesus faith farm"}, "5": {"name": "Animals — Picture 1", "tags": "animals animal"}, "6": {"name": "Animals — Picture 2", "tags": "animals animal"}, "7": {"name": "Animals — Picture 3", "tags": "animals animal"}, "8": {"name": "Animals — Picture 4", "tags": "animals animal"}, "9": {"name": "Animals — Picture 5", "tags": "animals animal"}, "10": {"name": "Animals — Picture 6", "tags": "animals animal"}, "11": {"name": "Animals — Picture 7", "tags": "animals animal"}, "12": {"name": "Animals — Picture 8", "tags": "animals animal"}, "13": {"name": "Cozy Otter Café", "tags": "animals animal otter cocoa cookies cafe"}, "14": {"name": "Forest Waterfall", "tags": "nature gardens landscape"}, "15": {"name": "Forest Stream", "tags": "nature gardens landscape"}, "16": {"name": "Flower Garden", "tags": "nature gardens landscape flowers sunflower tulip daisy"}, "17": {"name": "Gum at the Factory", "tags": "gum factory candy sweets"}, "18": {"name": "Gum Ingredients", "tags": "gum factory candy sweets"}, "19": {"name": "Mixing the Gum", "tags": "gum factory candy sweets"}, "20": {"name": "Rolling the Gum", "tags": "gum factory candy sweets"}, "21": {"name": "Cooling the Gum", "tags": "gum factory candy sweets"}, "22": {"name": "Wrapping the Gum", "tags": "gum factory candy sweets"}, "23": {"name": "Gum Factory Finale", "tags": "gum factory candy sweets"}};
         let selectedColor = [255, 59, 48, 255];
         const baseImage = new Image();
         let boundaryMask = null;
@@ -455,7 +456,7 @@ data-color="rgba(93,64,55,255)">
             const generation = ++pageLoadGeneration;
             pageReady = false;
             boundaryMask = null;
-            document.getElementById('page-title').innerText = `Page ${num} of ${totalPages}`;
+            document.getElementById('page-title').innerText = `${pageDetails[num].name} • ${num}/${totalPages}`;
             baseImage.onload = async () => {
                 if (generation !== pageLoadGeneration) return;
                 canvas.width = baseImage.width;
@@ -940,6 +941,15 @@ data-color="rgba(93,64,55,255)">
 
     <p>Choose your favorite picture to color!</p>
 
+    <div style="max-width:600px;margin:16px auto;text-align:left;">
+      <label for="farmsie-search">Search all coloring pages</label>
+      <div style="display:flex;gap:8px;margin-top:8px;">
+        <input id="farmsie-search" type="search" placeholder="Try otter, flowers, nature, or gum" autocomplete="off" style="min-width:0;flex:1;padding:12px;border:1px solid #888;border-radius:10px;font:16px sans-serif;background:white;color:#111;">
+        <button type="button" id="farmsie-clear-search">Clear</button>
+      </div>
+      <p id="farmsie-search-status" role="status" aria-live="polite"></p>
+    </div>
+    <div id="farmsie-search-results" hidden></div>
     <div id="farmsie-picture-grid"></div>
 
     <button id="farmsie-back-btn" type="button">
@@ -965,10 +975,10 @@ data-color="rgba(93,64,55,255)">
         const picture = document.createElement('img');
 
         picture.src = pageImages[number];
-        picture.alt = 'Coloring Picture ' + number;
+        picture.alt = pageDetails[number].name;
 
         const title = document.createElement('span');
-        title.textContent = 'Picture ' + number;
+        title.textContent = pageDetails[number].name;
 
         const free = document.createElement('span');
         free.className = 'farmsie-free';
@@ -1245,11 +1255,11 @@ categoryRow.style.cssText = `
                 image.src = url;
                 image.hidden = false;
                 image.style.display = 'block';
-                 message.textContent = `Your saved coloring • Picture ${number}`;
+                 message.textContent = `Your saved coloring • ${pageDetails[number].name}`;
                 image.style.cursor = 'pointer';
 image.tabIndex = 0;
 image.setAttribute('role', 'button');
-image.setAttribute('aria-label', `Continue coloring Picture ${number}`);
+image.setAttribute('aria-label', `Continue coloring ${pageDetails[number].name}`);
 
 const resumePicture = () => {
     currentPage = number;
@@ -1319,7 +1329,7 @@ return;
 
 book.pages.forEach((pageNumber, index) => {
     createCard(
-        'Picture ' + (index + 1),
+        pageDetails[pageNumber].name,
         '🎨 Start Coloring',
         pageImages[pageNumber],
         () => {
@@ -1331,6 +1341,48 @@ book.pages.forEach((pageNumber, index) => {
 });
 
     }
+
+    const search = document.getElementById('farmsie-search');
+    const results = document.getElementById('farmsie-search-results');
+    const status = document.getElementById('farmsie-search-status');
+    results.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:14px;max-width:1000px;margin:0 auto;';
+    const searchStyle = document.createElement('style');
+    searchStyle.textContent = '#farmsie-search-results[hidden], #farmsie-picture-grid[hidden] {display:none!important;}';
+    document.head.appendChild(searchStyle);
+    function normalizeSearch(value) {
+        return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    }
+    function matchesPage(number, query) {
+        const info = pageDetails[number];
+        const haystack = normalizeSearch(info.name + ' ' + info.tags + ' ' + number);
+        return normalizeSearch(query).trim().split(/\s+/).every(word => haystack.includes(word));
+    }
+    function updateSearch() {
+        const query = search.value.trim();
+        results.replaceChildren();
+        results.hidden = !query;
+        grid.hidden = !!query;
+        back.hidden = !!query;
+        if (!query) { status.textContent = ''; return; }
+        const matches = Object.keys(pageDetails).map(Number).filter(number => matchesPage(number, query));
+        status.textContent = matches.length ? matches.length + (matches.length === 1 ? ' picture found' : ' pictures found') : 'No pictures found. Try animals, nature, flowers, or gum.';
+        matches.forEach(number => {
+            const book = books.find(book => book.pages.includes(number));
+            const category = categories.find(category => category.id === book.category);
+            createCard(pageDetails[number].name, category.name, pageImages[number], () => {
+                loadBookPage(number);
+                menu.hidden = true;
+            });
+            results.appendChild(grid.lastElementChild);
+        });
+    }
+    search.addEventListener('input', updateSearch);
+    document.getElementById('farmsie-clear-search').addEventListener('click', () => {
+        search.value = ''; updateSearch(); search.focus();
+    });
+    search.addEventListener('keydown', event => {
+        if (event.key === 'Escape') { search.value = ''; updateSearch(); }
+    });
 
     // Begin at the category selection screen.
     showCategories();
