@@ -700,6 +700,7 @@ for(const [label,action] of [['Save PDF',()=>FarmsieFiles.download(FarmsieFiles.
   document.getElementById('palette-container').before(tools);
 
   let mode = 'brush';
+  let pendingInsert = null;
   let zoom = 1, panX = 0, panY = 0;
   let undo = [], redo = [];
   let originalPixels = null;
@@ -743,10 +744,45 @@ for(const [label,action] of [['Save PDF',()=>FarmsieFiles.download(FarmsieFiles.
   });
   tools.querySelectorAll('[data-tool]').forEach(button => {
     button.onclick = () => {
+      pendingInsert = null;
+      window.dispatchEvent(new Event('farmsie-insert-ended'));
       mode = button.dataset.tool;
       tools.querySelectorAll('[data-tool]').forEach(b => b.classList.toggle('active', b === button));
     };
   });
+
+  window.farmsiePrepareInsert = item => {
+    if (!pageReady || touches.size) return false;
+    const text = String(item.text || '').trim().slice(0, 100);
+    if (!text) return false;
+    pendingInsert = {text, size: Math.min(25, Math.max(2, Number(item.size) || 8)),
+      color: /^#[0-9a-f]{6}$/i.test(item.color) ? item.color : '#ff3b30',
+      font: item.sticker ? '"Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif' :
+        ({sans:'sans-serif',serif:'serif',mono:'monospace'}[item.font] || 'sans-serif')};
+    mode = 'insert';
+    tools.querySelectorAll('[data-tool]').forEach(b => b.classList.remove('active'));
+    return true;
+  };
+  function placeInsert(p) {
+    if (!pendingInsert) return;
+    startStroke();
+    ctx.save();
+    let size = Math.min(art.height * .7, art.width * pendingInsert.size / 100);
+    ctx.font = `${size}px ${pendingInsert.font}`;
+    const width = ctx.measureText(pendingInsert.text).width;
+    if (width > art.width * .9) size *= art.width * .9 / width;
+    ctx.font = `${size}px ${pendingInsert.font}`;
+    const halfWidth = ctx.measureText(pendingInsert.text).width / 2;
+    const x = Math.max(halfWidth, Math.min(art.width-halfWidth, p.x));
+    const y = Math.max(size, Math.min(art.height-size*.3, p.y));
+    ctx.fillStyle = pendingInsert.color;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText(pendingInsert.text, x, y);
+    ctx.restore();
+    pendingInsert = null; mode = 'brush';
+    tools.querySelector('[data-tool="brush"]').classList.add('active');
+    window.dispatchEvent(new Event('farmsie-insert-ended'));
+  }
 
   function limitPan() {
     const visible = 40;
@@ -888,7 +924,7 @@ for(const [label,action] of [['Save PDF',()=>FarmsieFiles.download(FarmsieFiles.
       panX += loc.x - gesture.local.x;
       panY += loc.y - gesture.local.y;
       renderView();
-    } else if (valid(here)) {
+    } else if (gesture.tool !== 'insert' && valid(here)) {
       startStroke(); stroke(gesture.p, here);
     }
     gesture.p = here; gesture.local = loc;
@@ -905,7 +941,8 @@ for(const [label,action] of [['Save PDF',()=>FarmsieFiles.download(FarmsieFiles.
     if (cancelled) { cancelStroke(); return; }
     const p = point(e);
     if (pageReady && gesture.tool !== 'move' && valid(p)) {
-      startStroke(); stroke(gesture.p, p);
+      if (gesture.tool === 'insert') placeInsert(p);
+      else { startStroke(); stroke(gesture.p, p); }
     }
     if (gesture.changed) {
       undo.push(gesture.before);
@@ -935,6 +972,11 @@ for(const [label,action] of [['Save PDF',()=>FarmsieFiles.download(FarmsieFiles.
     tctx.drawImage(baseImage, 0, 0);
     originalPixels = tctx.getImageData(0,0,temp.width,temp.height);
     undo = []; redo = []; gesture = null; pinch = null; touches.clear();
+    if (pendingInsert) {
+      pendingInsert = null; mode = 'brush';
+      tools.querySelector('[data-tool="brush"]').classList.add('active');
+      window.dispatchEvent(new Event('farmsie-insert-ended'));
+    }
     zoom = 1; panX = 0; panY = 0; renderView();
   }
   baseImage.addEventListener('load', refreshOriginal);
@@ -2970,5 +3012,90 @@ body.farmsie-tools-hidden #farmsie-tools {display:none;}
  if(window.visualViewport)window.visualViewport.addEventListener('resize',arrange);
  if(document.fonts)document.fonts.ready.then(arrange);
  arrange();
+})();
+</script>
+
+<!-- Compact toolbar and artwork additions. -->
+<style>
+body > footer {display:none!important;}
+body #farmsie-tools {
+ bottom:0;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));
+ gap:4px;padding:6px 6px calc(6px + env(safe-area-inset-bottom,0px));
+ overflow:visible;max-height:none;box-sizing:border-box;
+}
+body #farmsie-tools > button,body #farmsie-tools > details > summary {
+ width:100%;min-width:0;box-sizing:border-box;padding:10px 2px;
+ font:600 13px/1.2 system-ui,sans-serif;min-height:46px;text-align:center;
+}
+body #farmsie-tools > details {display:block;margin:0;min-width:0;}
+body #farmsie-tools .farmsie-panel-content {
+ bottom:var(--farmsie-dock-height,70px);max-height:55dvh;
+ left:8px;right:8px;max-width:600px;margin:auto;overflow:auto;
+}
+body #farmsie-tools .farmsie-panel-content * {
+ font-family:system-ui,sans-serif;text-shadow:none;-webkit-text-stroke:0;
+}
+body #farmsie-tools .farmsie-panel-content h3 {color:white;font-size:16px;margin:10px 0;}
+body #farmsie-tools .farmsie-panel-content p {font-size:13px;color:#ddd;}
+body #farmsie-tools .farmsie-panel-content label {color:white;margin:12px 0;flex-wrap:wrap;font-size:14px;}
+body #farmsie-tools .farmsie-panel-content input[type=range] {width:100%;}
+body #farmsie-tools .farmsie-panel-content input[type=text] {width:100%;box-sizing:border-box;padding:12px;font-size:16px;border-radius:8px;}
+body #farmsie-tools .farmsie-panel-content select {font-size:16px;padding:8px;}
+body #farmsie-tools .farmsie-panel-content button {margin:3px;white-space:normal;}
+body #farmsie-tools #palette-container {position:static;display:flex;flex-wrap:wrap;width:100%;max-height:none;}
+body #farmsie-tools #palette-container .color-btn {min-height:32px;width:32px;height:32px;flex:0 0 32px;padding:0;}
+#farmsie-insert-notice {position:fixed;left:10px;right:10px;bottom:var(--farmsie-dock-height,70px);z-index:35;background:#153f51;color:white;padding:10px;border-radius:10px;font:14px system-ui;text-align:center;}
+#farmsie-insert-notice[hidden] {display:none;}
+</style>
+<script>
+(() => {
+ const tools=document.getElementById('farmsie-tools');
+ const brush=tools.querySelector('[data-tool="brush"]'),erase=tools.querySelector('[data-tool="erase"]'),move=tools.querySelector('[data-tool="move"]'),undo=document.getElementById('farmsie-undo');
+ function drawer(title,id){
+  const d=document.createElement('details');d.className='farmsie-tool-panel';d.id=id;
+  const summary=document.createElement('summary');summary.textContent=title;
+  const content=document.createElement('div');content.className='farmsie-panel-content';
+  d.append(summary,content);return {d,content};
+ }
+ const draw=drawer('🖌 Draw','farmsie-draw-drawer'),more=drawer('⋯ More','farmsie-more-drawer');
+ const size=document.getElementById('farmsie-brush-size').closest('label');
+ const color=document.getElementById('farmsie-custom-color').closest('label');
+ const palette=document.getElementById('palette-container');
+ draw.content.append(brush,size,color,palette);
+ tools.querySelectorAll(':scope > .farmsie-tool-panel').forEach(d=>d.remove());
+ const remaining=[...tools.children].filter(e=>![erase,move,undo].includes(e));
+ more.content.innerHTML=`<h3>Add text or a sticker</h3>
+ <label>Text <input id="farmsie-add-text" type="text" maxlength="100" placeholder="Write something…"></label>
+ <label>Style <select id="farmsie-text-font"><option value="sans">Simple</option><option value="serif">Classic</option><option value="mono">Typewriter</option></select>
+ <input id="farmsie-text-color" type="color" value="#ff3b30" aria-label="Text color"></label>
+ <label>Text / sticker size <input id="farmsie-insert-size" type="range" min="2" max="25" value="8" aria-label="Text and sticker size"></label>
+ <button type="button" id="farmsie-place-text">Place text</button>
+ <div id="farmsie-stickers" aria-label="Choose a sticker"></div>
+ <p id="farmsie-add-help" role="status">Choose a size, then tap your picture to place it. Undo removes it. Once placed, it becomes part of the picture.</p>
+ <h3>History, zoom & settings</h3><div id="farmsie-extra-controls"></div>
+ <h3>Save & activities</h3><div id="farmsie-export-controls"></div>`;
+ more.content.querySelector('#farmsie-extra-controls').append(...remaining);
+ more.content.querySelector('#farmsie-export-controls').append(...document.querySelector('body > footer').children);
+ tools.replaceChildren(draw.d,erase,move,undo,more.d);
+ const notice=document.createElement('div');notice.id='farmsie-insert-notice';notice.hidden=true;notice.setAttribute('role','status');
+ notice.append(document.createTextNode('Tap your picture to place it. '));
+ const cancel=document.createElement('button');cancel.textContent='Cancel';cancel.type='button';cancel.onclick=()=>brush.click();notice.append(cancel);document.body.append(notice);
+ function close(){draw.d.open=false;more.d.open=false;}
+ for(const d of [draw.d,more.d])d.addEventListener('toggle',()=>{if(d.open)(d===draw.d?more.d:draw.d).open=false;});
+ document.getElementById('canvas-container').addEventListener('pointerdown',close,true);
+ document.addEventListener('keydown',e=>{if(e.key==='Escape'){close();brush.click();}});
+ for(const button of [brush,erase,move,undo])button.addEventListener('click',close);
+ window.addEventListener('farmsie-insert-ended',()=>notice.hidden=true);
+ function prepare(text,sticker=false){
+  const ok=window.farmsiePrepareInsert({text,sticker,size:document.getElementById('farmsie-insert-size').value,
+   color:document.getElementById('farmsie-text-color').value,font:document.getElementById('farmsie-text-font').value});
+  if(ok){document.activeElement?.blur();close();notice.hidden=false;}
+  else document.getElementById('farmsie-add-help').textContent='Enter some text and wait for the picture to load.';
+ }
+ document.getElementById('farmsie-place-text').onclick=()=>prepare(document.getElementById('farmsie-add-text').value);
+ for(const [emoji,name] of [['❤️','Heart'],['⭐','Star'],['🌈','Rainbow'],['🌸','Flower'],['🦋','Butterfly'],['🐱','Cat'],['🐶','Dog'],['🎨','Palette'],['🎉','Celebration'],['☀️','Sun'],['🌙','Moon'],['✨','Sparkles']]){
+  const b=document.createElement('button');b.type='button';b.textContent=emoji;b.setAttribute('aria-label',name+' sticker');b.onclick=()=>prepare(emoji,true);document.getElementById('farmsie-stickers').append(b);
+ }
+ window.dispatchEvent(new Event('resize'));
 })();
 </script>
