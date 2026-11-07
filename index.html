@@ -1,6 +1,36 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<script>
+// Raster layers: the original remains locked underneath editable transparent layers.
+class FarmsieLayerStack {
+ constructor(width,height,base,factory=()=>document.createElement('canvas')){
+  this.width=width;this.height=height;this.factory=factory;this.base=this.surface();this.base.getContext('2d').drawImage(base,0,0);this.layers=[];this.activeId=null;this.serial=0;
+ }
+ surface(){const c=this.factory();c.width=this.width;c.height=this.height;return c;}
+ add(name='Paint layer',blend='source-over'){
+  if(this.layers.length>=8)throw Error('This picture has 8 layers. Delete a layer before adding another.');
+  const layer={id:'layer-'+(++this.serial),name,visible:true,opacity:1,blend,canvas:this.surface()};this.layers.push(layer);this.activeId=layer.id;return layer;
+ }
+ get active(){return this.layers.find(l=>l.id===this.activeId);}
+ render(ctx){ctx.save();ctx.setTransform(1,0,0,1,0,0);ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over';ctx.clearRect(0,0,this.width,this.height);ctx.drawImage(this.base,0,0);
+  for(const l of this.layers){if(!l.visible)continue;ctx.globalAlpha=l.opacity;ctx.globalCompositeOperation=l.blend;ctx.drawImage(l.canvas,0,0);}ctx.restore();
+ }
+ snapshot(){return {width:this.width,height:this.height,serial:this.serial,activeId:this.activeId,layers:this.layers.map(({canvas,...meta})=>({...meta,pixels:canvas.getContext('2d').getImageData(0,0,this.width,this.height)}))};}
+ restore(state){if(!state||state.width!==this.width||state.height!==this.height)return;this.serial=state.serial;this.activeId=state.activeId;this.layers=state.layers.map(({pixels,...meta})=>{const canvas=this.surface();canvas.getContext('2d').putImageData(pixels,0,0);return {...meta,canvas};});}
+ duplicate(id){const source=this.layers.find(l=>l.id===id);const copy=this.add(source.name+' copy',source.blend);copy.visible=source.visible;copy.opacity=source.opacity;copy.canvas.getContext('2d').drawImage(source.canvas,0,0);return copy;}
+ remove(id){this.layers=this.layers.filter(l=>l.id!==id);if(this.activeId===id)this.activeId=this.layers.at(-1)?.id||null;if(!this.layers.length)this.add();}
+ move(id,delta){const from=this.layers.findIndex(l=>l.id===id),to=Math.max(0,Math.min(this.layers.length-1,from+delta));if(from<0)return;this.layers.splice(to,0,this.layers.splice(from,1)[0]);}
+ serialize(){const activeId=this.activeId,serial=this.serial;const tasks=this.layers.map(({canvas,...meta})=>new Promise((resolve,reject)=>canvas.toBlob(png=>png?resolve({...meta,png}):reject(Error('Could not save a layer')),'image/png')));return Promise.all(tasks).then(layers=>({version:1,activeId,serial,layers}));}
+ async load(saved,decode=createImageBitmap){if(saved?.version!==1||!Array.isArray(saved.layers)||saved.layers.length>8||!saved.layers.length)throw Error('Invalid saved layers');const loaded=[];
+  for(const {png,...meta} of saved.layers){const bitmap=await decode(png),canvas=this.surface();canvas.getContext('2d').drawImage(bitmap,0,0);bitmap.close?.();loaded.push({...meta,canvas});}
+  this.layers=loaded;this.serial=saved.serial;this.activeId=loaded.some(l=>l.id===saved.activeId)?saved.activeId:loaded.at(-1).id;
+ }
+}
+if(typeof window!=='undefined')window.FarmsieLayerStack=FarmsieLayerStack;
+if(typeof module!=='undefined')module.exports=FarmsieLayerStack;
+
+</script>
 <script>window.FarmsieFiles=(()=>{
  const enc=new TextEncoder();
  function download(blob,name){if(!blob)throw Error('Could not create file');const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);}
@@ -427,7 +457,7 @@ data-color="rgba(93,64,55,255)">
 
         function progressKey(pageNumber) {
             // Changing an image filename starts fresh progress for that image.
-            return `${pageNumber}|${pageDetails[pageNumber]?.importId || pageImages[pageNumber]}`;
+            return pageDetails[pageNumber]?.importId ? `import|${pageDetails[pageNumber].importId}` : `${pageNumber}|${pageImages[pageNumber]}`;
         }
 
         function openProgressDB() {
@@ -459,16 +489,22 @@ data-color="rgba(93,64,55,255)">
                 const db = await openProgressDB();
                 const saved = await new Promise((resolve, reject) => {
                     const transaction = db.transaction(progressStoreName, 'readonly');
-                    const request = transaction.objectStore(progressStoreName).get(progressKey(pageNumber));
-                    request.onsuccess = () => resolve(request.result);
+                    const store=transaction.objectStore(progressStoreName);
+                    const request = store.get(progressKey(pageNumber));
+                    request.onsuccess = () => {
+                      if(request.result || !pageDetails[pageNumber]?.importId){resolve(request.result);return;}
+                      const cursor=store.openCursor();cursor.onerror=()=>reject(cursor.error);
+                      cursor.onsuccess=()=>{const row=cursor.result;if(!row){resolve(null);return;}if(String(row.key).endsWith('|'+pageDetails[pageNumber].importId)){resolve(row.value);return;}row.continue();};
+                    };
                     request.onerror = () => reject(request.error);
                 });
-                if (!saved || saved.width !== canvas.width || saved.height !== canvas.height) return;
+                if (!saved || saved.width !== canvas.width || saved.height !== canvas.height) return null;
                 const bitmap = await createImageBitmap(saved.png);
                 if (generation === pageLoadGeneration && currentPage === pageNumber) {
                     ctx.drawImage(bitmap, 0, 0);
                 }
                 bitmap.close();
+                return saved;
             } catch (error) {
                 console.warn('Farmsie: could not restore saved coloring progress:', error);
             }
@@ -481,28 +517,32 @@ data-color="rgba(93,64,55,255)">
             const height = canvas.height;
             // Capture before navigating away; chain writes to preserve tap order.
             const pngPromise = new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+            const layerPromise = window.farmsieSerializeLayers?.() || Promise.resolve(null);
+            layerPromise.catch(()=>{});
             saveQueue = saveQueue.catch(() => {}).then(async () => {
-                const png = await pngPromise;
+                const [png,layers] = await Promise.all([pngPromise,layerPromise]);
                 if (!png) throw new Error('Could not snapshot canvas');
                 const db = await openProgressDB();
                 await new Promise((resolve, reject) => {
                     const transaction = db.transaction(progressStoreName, 'readwrite');
-                    transaction.objectStore(progressStoreName).put({ png, width, height }, key);
+                    transaction.objectStore(progressStoreName).put({ png, width, height, layers }, key);
                     transaction.oncomplete = resolve;
                     transaction.onerror = () => reject(transaction.error);
                     transaction.onabort = () => reject(transaction.error);
                 });
             }).catch(error => {
                 console.warn('Farmsie: automatic save unavailable:', error);
+                window.dispatchEvent(new CustomEvent('farmsie-save-error',{detail:'Could not save on this device. Export PNG to keep a copy.'}));
             });
         }
 
         function loadBookPage(num) {
+            window.farmsieBeforePageChange?.();
             currentPage = num;
             const generation = ++pageLoadGeneration;
             pageReady = false;
             boundaryMask = null;
-            document.getElementById('page-title').innerText = `${pageDetails[num].name} • ${num}/${totalPages}`;
+            document.getElementById('page-title').innerText = `${pageDetails[num].name} • ${Object.keys(pageImages).map(Number).indexOf(num)+1}/${Object.keys(pageImages).length}`;
             baseImage.onload = async () => {
                 if (generation !== pageLoadGeneration) return;
                 canvas.width = baseImage.width;
@@ -510,7 +550,9 @@ data-color="rgba(93,64,55,255)">
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 ctx.drawImage(baseImage, 0, 0);
                 buildBoundaryMask();
-                await restorePageProgress(num, generation);
+                const saved = await restorePageProgress(num, generation);
+                if(generation!==pageLoadGeneration)return;
+                await window.farmsieInitLayers?.(saved,generation);
                 if (generation === pageLoadGeneration) {
     pageReady = true;
 
@@ -537,10 +579,8 @@ data-color="rgba(93,64,55,255)">
         });
 
         function changePage(direction) {
-            currentPage += direction;
-            if (currentPage < 1) currentPage = totalPages;
-            if (currentPage > totalPages) currentPage = 1;
-            loadBookPage(currentPage);
+            const pages=Object.keys(pageImages).map(Number).sort((a,b)=>a-b);
+            const at=pages.indexOf(currentPage);loadBookPage(pages[(at+direction+pages.length)%pages.length]);
         }
 
         function fillRegion(startX, startY, fillColor) {
@@ -687,6 +727,12 @@ for(const [label,action] of [['Save PDF',()=>FarmsieFiles.download(FarmsieFiles.
   tools.setAttribute('aria-label', 'Farmsie coloring tools');
   tools.innerHTML = `
     <button type="button" data-tool="brush" class="active">🖌 Brush</button>
+    <button type="button" data-tool="pencil">✏️ Pencil</button>
+    <button type="button" data-tool="crayon">🖍️ Crayon</button>
+    <button type="button" data-tool="highlighter">🖊️ Highlighter</button>
+    <button type="button" data-tool="airbrush">💨 Airbrush</button>
+    <button type="button" data-tool="eyedropper">💧 Eyedropper</button>
+    <label>Opacity <input id="farmsie-brush-opacity" type="range" min="5" max="100" value="100" aria-label="Tool opacity"></label>
     <button type="button" data-tool="smudge">🫧 Smudge</button>
     <button type="button" data-tool="transform">↔ Transform</button>
     <button type="button" data-tool="erase">🧽 Eraser</button>
@@ -702,6 +748,7 @@ for(const [label,action] of [['Save PDF',()=>FarmsieFiles.download(FarmsieFiles.
   document.getElementById('palette-container').before(tools);
 
   let mode = 'brush';
+  let layers = null;
   let pendingInsert = null;
   let floating = null, selectionStart = null;
   let zoom = 1, panX = 0, panY = 0;
@@ -711,8 +758,47 @@ for(const [label,action] of [['Save PDF',()=>FarmsieFiles.download(FarmsieFiles.
   let gesture = null, pinch = null;
 
   const maxSteps = () => Math.max(1, Math.min(6,
-    Math.floor(36 * 1024 * 1024 / Math.max(1, art.width * art.height * 4))));
-  const snapshot = () => ctx.getImageData(0, 0, art.width, art.height);
+    Math.floor(36 * 1024 * 1024 / Math.max(1, art.width * art.height * 4 * (layers?.layers.length || 1)))));
+  const snapshot = () => layers.snapshot();
+  function applySnapshot(state){layers.restore(state);layers.render(ctx);notifyLayers();}
+  function notifyLayers(){window.dispatchEvent(new Event('farmsie-layers-updated'));}
+  const activeContext = () => layers.active.canvas.getContext('2d', {willReadFrequently:true});
+  const paintBlend = () => 'source-over';
+  window.farmsieInitLayers = async (saved,generation) => {
+    const stack=new FarmsieLayerStack(art.width,art.height,baseImage);
+    if(saved?.layers){
+      try{await stack.load(saved.layers);}catch(error){console.warn(error);window.dispatchEvent(new CustomEvent('farmsie-save-error',{detail:'Layer recovery failed. Your saved picture was recovered as one layer.'}));}
+    }
+    if(!stack.layers.length){
+      const layer=stack.add(saved?.png?'Previous artwork':'Paint 1',saved?.png?'source-over':paintBlend());
+      if(saved?.png)layer.canvas.getContext('2d').drawImage(art,0,0);
+    }
+    if(generation!==pageLoadGeneration)return;
+    layers=stack;layers.render(ctx);undo=[];redo=[];notifyLayers();
+  };
+  window.farmsieSerializeLayers = () => layers?.serialize();
+  window.farmsieBeforePageChange = () => {cancelStroke();cancelFloating();layers=null;notifyLayers();};
+  window.farmsieLayerInfo = () => layers ? {activeId:layers.activeId,layers:layers.layers.map(({canvas,...meta})=>meta)} : null;
+  window.farmsieLayerAction = (action,id,value) => {
+    if(!pageReady || !layers || touches.size)return;
+    cancelFloating();
+    if(action==='select'){if(layers.layers.some(l=>l.id===id))layers.activeId=id;notifyLayers();return;}
+    const before=snapshot();
+    try{
+      const l=layers.layers.find(l=>l.id===id);
+      if(action==='add')layers.add('Paint '+(layers.serial+1),paintBlend());
+      if(action==='copy-base'){const copy=layers.add('Original copy');copy.canvas.getContext('2d').drawImage(layers.base,0,0);}
+      if(action==='duplicate')layers.duplicate(id);
+      if(action==='delete')layers.remove(id);
+      if(action==='rename' && l)l.name=String(value).trim().slice(0,60)||l.name;
+      if(action==='visible' && l)l.visible=!l.visible;
+      if(action==='opacity' && l)l.opacity=Math.min(1,Math.max(0,Number(value)));
+      if(action==='up')layers.move(id,1);
+      if(action==='down')layers.move(id,-1);
+      undo.push(before);if(undo.length>maxSteps())undo.shift();redo=[];
+      layers.render(ctx);notifyLayers();autoSaveCurrentPage();
+    }catch(error){applySnapshot(before);window.dispatchEvent(new CustomEvent('farmsie-save-error',{detail:error.message}));}
+  };
   function beginChange() {
     undo.push(snapshot());
     if (undo.length > maxSteps()) undo.shift();
@@ -720,7 +806,7 @@ for(const [label,action] of [['Save PDF',()=>FarmsieFiles.download(FarmsieFiles.
   }
   function restore(state) {
     if (!state || state.width !== art.width || state.height !== art.height) return;
-    ctx.putImageData(state, 0, 0);
+    applySnapshot(state);
     autoSaveCurrentPage();
   }
   tools.querySelector('#farmsie-undo').onclick = () => {
@@ -739,8 +825,7 @@ for(const [label,action] of [['Save PDF',()=>FarmsieFiles.download(FarmsieFiles.
     if (!pageReady || !confirm('Erase all colors on this page? Other pages stay saved.')) return;
     cancelFloating();
     beginChange();
-    ctx.clearRect(0, 0, art.width, art.height);
-    ctx.drawImage(baseImage, 0, 0);
+    layers.layers=[];layers.add('Paint 1',paintBlend());layers.render(ctx);notifyLayers();
     autoSaveCurrentPage();
   };
   tools.querySelector('#farmsie-custom-color').addEventListener('input', e => {
@@ -773,12 +858,14 @@ for(const [label,action] of [['Save PDF',()=>FarmsieFiles.download(FarmsieFiles.
   }
   function drawFloating() {
     if (!floating) return;
-    ctx.putImageData(floating.background,0,0);
-    ctx.drawImage(floating.image, floating.x, floating.y, floating.w, floating.h);
+    const target=activeContext();
+    target.putImageData(floating.background,0,0);
+    target.drawImage(floating.image, floating.x, floating.y, floating.w, floating.h);
+    layers.render(ctx);
     boxAt(floating.x,floating.y,floating.w,floating.h);
   }
   function cancelFloating(restore=true) {
-    if (floating && restore && floating.page===currentPage) ctx.putImageData(floating.before,0,0);
+    if (floating && restore && floating.page===currentPage) applySnapshot(floating.before);
     floating=null;selectionStart=null;selectionBox.hidden=true;pendingInsert=null;
     if(mode==='transform'){
       mode='brush';tools.querySelectorAll('[data-tool]').forEach(b=>b.classList.toggle('active',b.dataset.tool==='brush'));
@@ -791,7 +878,7 @@ for(const [label,action] of [['Save PDF',()=>FarmsieFiles.download(FarmsieFiles.
     undo.push(floating.before);if(undo.length>maxSteps())undo.shift();redo=[];
     floating=null;selectionBox.hidden=true;selectionStart=null;mode='brush';
     tools.querySelectorAll('[data-tool]').forEach(b=>b.classList.toggle('active',b.dataset.tool==='brush'));
-    autoSaveCurrentPage();window.dispatchEvent(new Event('farmsie-insert-ended'));return true;
+    notifyLayers();autoSaveCurrentPage();window.dispatchEvent(new Event('farmsie-insert-ended'));return true;
   };
   window.farmsieResizeTransform = factor => {
     if(!floating)return;
@@ -816,8 +903,11 @@ for(const [label,action] of [['Save PDF',()=>FarmsieFiles.download(FarmsieFiles.
     const image=document.createElement('canvas');image.width=Math.ceil(width+size*.3);image.height=Math.ceil(size*1.5);
     const c=image.getContext('2d');c.font=`${size}px ${font}`;c.fillStyle=color;c.textBaseline='alphabetic';c.fillText(text,size*.15,size*1.1);
     const before=snapshot();
+    try{layers.add(item.sticker?'Sticker '+text:'Text: '+text.slice(0,25));}catch(error){window.dispatchEvent(new CustomEvent('farmsie-save-error',{detail:error.message}));return false;}
+    notifyLayers();
+    const background=activeContext().getImageData(0,0,art.width,art.height);
     const visible=point({clientX:stage.getBoundingClientRect().left+stage.clientWidth/2,clientY:stage.getBoundingClientRect().top+stage.clientHeight/2});
-    floating={image,before,background:before,page:currentPage,w:image.width,h:image.height,
+    floating={image,before,background,page:currentPage,w:image.width,h:image.height,
       x:Math.max(0,Math.min(art.width-image.width,visible.x-image.width/2)),
       y:Math.max(0,Math.min(art.height-image.height,visible.y-image.height/2))};
     mode='transform';drawFloating();
@@ -828,21 +918,16 @@ for(const [label,action] of [['Save PDF',()=>FarmsieFiles.download(FarmsieFiles.
     const x=Math.max(0,Math.floor(Math.min(from.x,to.x))),y=Math.max(0,Math.floor(Math.min(from.y,to.y)));
     const w=Math.min(art.width-x,Math.ceil(Math.abs(from.x-to.x))),h=Math.min(art.height-y,Math.ceil(Math.abs(from.y-to.y)));
     selectionBox.hidden=true;if(w<2||h<2)return;
-    const before=snapshot(),background=snapshot();
+    if(!layers?.active?.visible){announceTransform('Choose a visible layer in Layers first.');return;}
+    const before=snapshot(),target=activeContext();
+    const background=target.getImageData(0,0,art.width,art.height);
     const image=document.createElement('canvas');image.width=w;image.height=h;
-    const c=image.getContext('2d'),cut=c.createImageData(w,h);
-    const whole=document.getElementById('farmsie-selection-kind')?.value==='whole';let count=0;
-    for(let yy=0;yy<h;yy++)for(let xx=0;xx<w;xx++){
-      const k=((y+yy)*art.width+x+xx)*4,n=(yy*w+xx)*4;
-      const changed=whole||[0,1,2,3].some(i=>before.data[k+i]!==originalPixels.data[k+i]);
-      if(!changed)continue;count++;
-      for(let i=0;i<4;i++){
-        cut.data[n+i]=before.data[k+i];
-        background.data[k+i]=whole?255:originalPixels.data[k+i];
-      }
-    }
-    if(!count){announceTransform('No added paint or text here. Select another area, or choose Whole picture area in More.');return;}
+    const c=image.getContext('2d'),cut=target.getImageData(x,y,w,h);
+    if(!cut.data.some((v,i)=>i%4===3&&v)){announceTransform('This part of the selected layer is empty. Choose the right layer first.');return;}
     c.putImageData(cut,0,0);
+    for(let yy=y;yy<y+h;yy++)for(let xx=x;xx<x+w;xx++){
+      const k=(yy*art.width+xx)*4;background.data.fill(0,k,k+4);
+    }
     floating={image,before,background,page:currentPage,x,y,w,h};drawFloating();
     announceTransform('Drag the selection, resize if needed, then tap Apply.');
   }
@@ -897,58 +982,55 @@ for(const [label,action] of [['Save PDF',()=>FarmsieFiles.download(FarmsieFiles.
   // Brush and eraser draw continuously as the user slides a finger or stylus.
   // Black outlines are never overwritten, and eraser restores the original art.
   function stroke(from, to) {
-    if (!pageReady || !boundaryMask || !originalPixels) return;
-    const image = ctx.getImageData(0, 0, art.width, art.height);
-    const d = image.data, o = originalPixels.data;
-    const smudgeSource = mode === 'smudge' ? new Uint8ClampedArray(d) : null;
-    let painted = false;
-    const radius = Math.max(1, Number(tools.querySelector('#farmsie-brush-size').value)
-      * art.width / stage.clientWidth / zoom / 2);
-    const length = Math.hypot(to.x - from.x, to.y - from.y);
-    const count = Math.max(1, Math.ceil(length / Math.max(1, radius / 2)));
-    for (let j = 0; j <= count; j++) {
-      const cx = from.x + (to.x - from.x) * j / count;
-      const cy = from.y + (to.y - from.y) * j / count;
-      for (let y = Math.max(0, Math.floor(cy - radius)); y <= Math.min(art.height-1, Math.ceil(cy+radius)); y++) {
-        for (let x = Math.max(0, Math.floor(cx - radius)); x <= Math.min(art.width-1, Math.ceil(cx+radius)); x++) {
-          if ((x-cx)**2 + (y-cy)**2 > radius*radius) continue;
-          const n = y * art.width + x;
-          const k = n * 4;
-          // Tint the original paper, including antialiased edges. Pure black
-          // stays black; no expanded flood-fill mask can leave a white halo.
-          if (mode === 'erase') {
-            d[k] = o[k]; d[k+1] = o[k+1];
-            d[k+2] = o[k+2]; d[k+3] = o[k+3];
-          } else if (mode === 'smudge') {
-            if (!pageDetails[currentPage]?.importId && Math.max(o[k],o[k+1],o[k+2])<24) continue;
-            const dx=to.x-from.x,dy=to.y-from.y;
-            const distance=Math.hypot(dx,dy), reach=Math.min(radius*.7,distance);
-            const sx=Math.max(0,Math.min(art.width-1,Math.round(x-(distance?dx/distance*reach:0))));
-            const sy=Math.max(0,Math.min(art.height-1,Math.round(y-(distance?dy/distance*reach:0))));
-            const source=(sy*art.width+sx)*4;
-            const blend=.35*Math.max(0,1-Math.hypot(x-cx,y-cy)/radius);
-            for(let c=0;c<3;c++)d[k+c]=Math.round(d[k+c]*(1-blend)+smudgeSource[source+c]*blend);
-          } else {
-            if (d[k] !== selectedColor[0] || d[k+1] !== selectedColor[1] ||
-                d[k+2] !== selectedColor[2] || d[k+3] !== 255) painted = true;
-            if (pageDetails[currentPage]?.importId) {
-              // Personal pictures are paint-over surfaces, including dark areas.
-              d[k] = selectedColor[0]; d[k+1] = selectedColor[1];
-              d[k+2] = selectedColor[2];
-            } else {
-              const alpha = o[k+3] / 255;
-              for (let c = 0; c < 3; c++) {
-                const paper = o[k+c] * alpha + 255 * (1-alpha);
-                d[k+c] = Math.round(selectedColor[c] * paper / 255);
-              }
-            }
-            d[k+3] = 255;
+    if (!pageReady || !layers?.active?.visible || !gesture) return;
+    const target=activeContext(),image=target.getImageData(0,0,art.width,art.height),d=image.data;
+    const keepLines=!pageDetails[currentPage]?.importId;
+    const original=originalPixels.data;
+    const size=Number(tools.querySelector('#farmsie-brush-size').value);
+    const opacity=Number(tools.querySelector('#farmsie-brush-opacity').value)/100;
+    const radius=Math.max(.5,size*art.width/stage.clientWidth/zoom/2*(mode==='pencil'?.3:1));
+    const dx=to.x-from.x,dy=to.y-from.y,length=Math.hypot(dx,dy);
+    const count=Math.max(1,Math.ceil(length/Math.max(.5,radius/3)));
+    if(!gesture.coverage)gesture.coverage=new Float32Array(art.width*art.height);
+    const smudge=mode==='smudge'?new Uint8ClampedArray(d):null;
+    for(let j=0;j<=count;j++){
+      const cx=from.x+dx*j/count,cy=from.y+dy*j/count;
+      for(let y=Math.max(0,Math.floor(cy-radius));y<=Math.min(art.height-1,Math.ceil(cy+radius));y++){
+        for(let x=Math.max(0,Math.floor(cx-radius));x<=Math.min(art.width-1,Math.ceil(cx+radius));x++){
+          const distance=Math.hypot(x-cx,y-cy);if(distance>radius)continue;
+          const n=y*art.width+x,k=n*4;
+          if(smudge){
+            const reach=Math.min(radius*.7,length);
+            const sx=Math.max(0,Math.min(art.width-1,Math.round(x-(length?dx/length*reach:0))));
+            const sy=Math.max(0,Math.min(art.height-1,Math.round(y-(length?dy/length*reach:0))));
+            const source=(sy*art.width+sx)*4,b=.35*opacity*(1-distance/radius);
+            const a=d[k+3]/255,sa=smudge[source+3]/255,out=a*(1-b)+sa*b;
+            for(let c=0;c<3;c++)d[k+c]=out?Math.round((d[k+c]*a*(1-b)+smudge[source+c]*sa*b)/out):0;
+            if(keepLines && Math.max(original[k],original[k+1],original[k+2])<24)d[k]=d[k+1]=d[k+2]=0;
+            d[k+3]=Math.round(out*255);continue;
           }
+          let amount=opacity;
+          if(mode==='highlighter')amount*=.28;
+          if(mode==='airbrush')amount*=.24*Math.pow(1-distance/radius,2);
+          if(mode==='crayon'){
+            const grain=((Math.imul(x+17,374761393)^Math.imul(y+31,668265263))>>>0)%100/100;
+            amount*=grain<.22?0:.25+.75*grain;
+          }
+          const previous=gesture.coverage[n];if(amount<=previous)continue;
+          gesture.coverage[n]=amount;
+          const ink=Math.min(1,(amount-previous)/Math.max(.0001,1-previous));
+          if(mode==='erase'){d[k+3]=Math.round(d[k+3]*(1-ink));continue;}
+          const a=d[k+3]/255,out=ink+a*(1-ink);
+          for(let c=0;c<3;c++){
+            const color=keepLines?selectedColor[c]*original[k+c]/255:selectedColor[c];
+            d[k+c]=Math.round((color*ink+d[k+c]*a*(1-ink))/out);
+          }
+          d[k+3]=Math.round(out*255);
         }
       }
     }
-    ctx.putImageData(image, 0, 0);
-    if (painted && mode === 'brush') window.farmsieHaptics?.pulse();
+    target.putImageData(image,0,0);layers.render(ctx);
+    if(mode!=='erase')window.farmsieHaptics?.pulse();
   }
 
   // Keep a provisional stroke until release, so a late second finger can
@@ -957,7 +1039,7 @@ for(const [label,action] of [['Save PDF',()=>FarmsieFiles.download(FarmsieFiles.
     if (!gesture.changed) { gesture.before = snapshot(); gesture.changed = true; }
   }
   function cancelStroke() {
-    if (gesture?.before) ctx.putImageData(gesture.before, 0, 0);
+    if (gesture?.before) applySnapshot(gesture.before);
     if(gesture?.floatStart && floating){Object.assign(floating,gesture.floatStart);drawFloating();}
     if(selectionStart){selectionStart=null;selectionBox.hidden=true;}
     gesture = null;
@@ -972,6 +1054,9 @@ for(const [label,action] of [['Save PDF',()=>FarmsieFiles.download(FarmsieFiles.
   }
   stage.addEventListener('pointerdown', e => {
     if (!pageReady || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    if(!['move','eyedropper'].includes(mode) && !layers?.active?.visible){
+      window.dispatchEvent(new CustomEvent('farmsie-save-error',{detail:'The selected layer is hidden. Show it using Layers before drawing.'}));return;
+    }
     e.preventDefault();
     stage.setPointerCapture(e.pointerId);
     touches.set(e.pointerId, local(e));
@@ -1012,7 +1097,7 @@ for(const [label,action] of [['Save PDF',()=>FarmsieFiles.download(FarmsieFiles.
       }else if(selectionStart){
         boxAt(Math.min(selectionStart.x,here.x),Math.min(selectionStart.y,here.y),Math.abs(here.x-selectionStart.x),Math.abs(here.y-selectionStart.y));
       }
-    } else if (valid(here)) {
+    } else if (gesture.tool !== 'eyedropper' && valid(here) && layers?.active?.visible) {
       startStroke(); stroke(gesture.p, here);
     }
     gesture.p = here; gesture.local = loc;
@@ -1030,14 +1115,20 @@ for(const [label,action] of [['Save PDF',()=>FarmsieFiles.download(FarmsieFiles.
     const p = point(e);
     if(pageReady && gesture.tool==='transform'){
       if(selectionStart){selectArea(selectionStart,{x:Math.max(0,Math.min(art.width,p.x)),y:Math.max(0,Math.min(art.height,p.y))});selectionStart=null;}
-    }else if (pageReady && gesture.tool !== 'move' && valid(p)) {
+    }else if(pageReady && gesture.tool==='eyedropper' && valid(p)){
+      const picked=ctx.getImageData(Math.floor(p.x),Math.floor(p.y),1,1).data;
+      selectedColor=[picked[0],picked[1],picked[2],255];
+      tools.querySelector('#farmsie-custom-color').value='#'+selectedColor.slice(0,3).map(c=>c.toString(16).padStart(2,'0')).join('');
+      document.querySelector('.color-btn.active')?.classList.remove('active');
+      tools.querySelector('[data-tool="brush"]').click();
+    }else if (pageReady && gesture.tool !== 'move' && valid(p) && layers?.active?.visible) {
       startStroke(); stroke(gesture.p, p);
     }
     if (gesture.changed) {
       undo.push(gesture.before);
       if (undo.length > maxSteps()) undo.shift();
       redo = [];
-      autoSaveCurrentPage();
+      notifyLayers();autoSaveCurrentPage();
     }
     gesture = null;
   }
@@ -1359,6 +1450,33 @@ for(const [label,action] of [['Save PDF',()=>FarmsieFiles.download(FarmsieFiles.
             return registerImport(record);
         } finally { URL.revokeObjectURL(source); }
     }
+    let deletingImport=false;
+    async function deleteImport(number,button){
+      if(deletingImport || importButton.disabled)return;
+      const info=pageDetails[number];if(!info?.importId)return;
+      if(!confirm('Delete “'+info.name+'” from My Imports and remove its saved artwork and layers? Your original file on your phone will not be deleted.'))return;
+      deletingImport=true;button.disabled=true;importButton.disabled=true;
+      try{
+        await saveQueue;
+        const next=importedRecords.filter(record=>record.id!==info.importId);
+        await FarmsieFiles.put('gallery-imports-v1',next);
+        importedRecords=next;importedBook.pages=importedBook.pages.filter(n=>n!==number);
+        const url=pageImages[number];delete pageImages[number];delete pageDetails[number];
+        if(currentPage===number)loadBookPage(1);
+        URL.revokeObjectURL(url);
+        showPictures(importedBook);updateSearch();
+        importMessage.textContent='Picture removed from My Imports.';
+        try{
+          const db=await openProgressDB();
+          await new Promise((resolve,reject)=>{
+            const t=db.transaction(progressStoreName,'readwrite'),r=t.objectStore(progressStoreName).openCursor();
+            r.onsuccess=()=>{const row=r.result;if(!row)return;if(String(row.key).endsWith('|'+info.importId))row.delete();row.continue();};
+            t.oncomplete=resolve;t.onerror=()=>reject(t.error);t.onabort=()=>reject(t.error);
+          });
+        }catch(error){console.warn('Saved import cleanup failed',error);}
+      }catch(error){importMessage.textContent='Could not delete the picture. Please try again.';button.disabled=false;}
+      finally{deletingImport=false;importButton.disabled=false;}
+    }
     // FARMSIE IMPORT STORAGE END
 
     const importPanel = document.createElement('div');
@@ -1372,7 +1490,7 @@ for(const [label,action] of [['Save PDF',()=>FarmsieFiles.download(FarmsieFiles.
     const importMessage = document.createElement('p');
     importMessage.setAttribute('role', 'status');
     importMessage.style.cssText = 'font:16px/1.5 system-ui;color:white;margin:10px 0 0;';
-    importMessage.textContent = 'Import a picture and paint over any part of it with Brush. Eraser restores your original picture. Saved in My Imports on this device.';
+    importMessage.textContent = 'Import a picture and paint over it. Layers keep your edits separate; Eraser clears the selected layer. Saved in My Imports on this device.';
     importPanel.append(importButton, picker, importMessage);
     grid.before(importPanel);
     importButton.onclick = () => picker.click();
@@ -1430,7 +1548,14 @@ for(const [label,action] of [['Save PDF',()=>FarmsieFiles.download(FarmsieFiles.
             card.style.opacity = '0.5';
         }
 
-        grid.appendChild(card);
+        const importedNumber=importedBook.pages.find(number=>pageImages[number]===image);
+        if(importedNumber){
+          const wrapper=document.createElement('div');wrapper.className='farmsie-import-wrap';
+          const remove=document.createElement('button');remove.type='button';remove.className='farmsie-import-delete';
+          remove.textContent='🗑 Delete picture';remove.setAttribute('aria-label','Delete '+title);
+          remove.onclick=()=>deleteImport(importedNumber,remove);
+          wrapper.append(card,remove);grid.append(wrapper);
+        }else grid.appendChild(card);
     }
 
 function showCategories() {
@@ -3151,7 +3276,7 @@ body #farmsie-tools #palette-container .color-btn {min-height:32px;width:32px;he
  const size=document.getElementById('farmsie-brush-size').closest('label');
  const color=document.getElementById('farmsie-custom-color').closest('label');
  const palette=document.getElementById('palette-container');
- draw.content.append(brush,tools.querySelector('[data-tool="smudge"]'),size,color,palette);
+ draw.content.append(brush,...['pencil','crayon','highlighter','airbrush','eyedropper','smudge'].map(name=>tools.querySelector('[data-tool="'+name+'"]')),size,document.getElementById('farmsie-brush-opacity').closest('label'),color,palette);
  tools.querySelectorAll(':scope > .farmsie-tool-panel').forEach(d=>d.remove());
  const remaining=[...tools.children].filter(e=>![erase,move,undo].includes(e));
  more.content.innerHTML=`<h3>Add text or a sticker</h3>
@@ -3162,7 +3287,7 @@ body #farmsie-tools #palette-container .color-btn {min-height:32px;width:32px;he
  <button type="button" id="farmsie-place-text">Preview text</button>
  <div id="farmsie-stickers" aria-label="Choose a sticker"></div>
  <p id="farmsie-add-help" role="status">Choose a size, then drag the preview to the exact position and tap Apply. Later, use Transform to select and move it again.</p>
- <h3>Move part of the picture</h3><label>Select <select id="farmsie-selection-kind"><option value="edits">Added paint, text & stickers</option><option value="whole">Whole picture area</option></select></label><p>Choose Transform, draw a box, then drag it. Whole picture area leaves white behind.</p><h3>History, zoom & settings</h3><div id="farmsie-extra-controls"></div>
+ <h3>Move part of the picture</h3><p>Choose a layer using the separate Layers button, then choose Transform, draw a box, and drag it. To move the original, first use Layers → Copy original.</p><h3>History, zoom & settings</h3><div id="farmsie-extra-controls"></div>
  <h3>Save & activities</h3><div id="farmsie-export-controls"></div>`;
  more.content.querySelector('#farmsie-extra-controls').append(...remaining);
  for(const percent of [1000,2500,5000]){
@@ -3179,7 +3304,7 @@ body #farmsie-tools #palette-container .color-btn {min-height:32px;width:32px;he
  for(const d of [draw.d,more.d])d.addEventListener('toggle',()=>{if(d.open)(d===draw.d?more.d:draw.d).open=false;});
  document.getElementById('canvas-container').addEventListener('pointerdown',close,true);
  document.addEventListener('keydown',e=>{if(e.key==='Escape'){close();brush.click();}});
- for(const button of [brush,erase,move,undo,tools.querySelector('[data-tool="smudge"]')])button.addEventListener('click',close);
+ for(const button of [brush,erase,move,undo,...['pencil','crayon','highlighter','airbrush','eyedropper','smudge'].map(name=>tools.querySelector('[data-tool="'+name+'"]'))])button.addEventListener('click',close);
  window.addEventListener('farmsie-insert-ended',()=>notice.hidden=true);
  window.addEventListener('farmsie-transform-status',e=>{message.textContent=e.detail+' ';notice.hidden=false;});
  const transform=tools.querySelector('[data-tool="transform"]');transform.addEventListener('click',close);
@@ -3203,3 +3328,62 @@ body #farmsie-tools #palette-container .color-btn {min-height:32px;width:32px;he
 #farmsie-insert-notice span {display:block;color:white;font:14px system-ui;text-shadow:none;-webkit-text-stroke:0;margin-bottom:5px;}
 body:has(#farmsie-menu:not([hidden])) #farmsie-insert-notice,body:has(#farmsie-menu:not([hidden])) #farmsie-selection-box {display:none;}
 </style>
+
+<style>
+#farmsie-layers-button {position:fixed;right:10px;bottom:calc(var(--farmsie-dock-height,70px) + 8px);z-index:36;border:1px solid #8a9bac;border-radius:12px;background:#183b50;color:white;padding:10px 14px;min-height:44px;font:600 14px system-ui;text-shadow:none;-webkit-text-stroke:0;}
+#farmsie-layers-panel {position:fixed;right:8px;left:auto;bottom:calc(var(--farmsie-dock-height,70px) + 60px);z-index:700;width:min(360px,calc(100vw - 16px));max-height:62dvh;overflow:auto;box-sizing:border-box;padding:14px;border:1px solid #627887;border-radius:16px;background:#17232e;color:white;box-shadow:0 8px 28px #0008;}
+#farmsie-layers-panel[hidden] {display:none;}
+#farmsie-layers-panel * {font-family:system-ui,sans-serif;text-shadow:none;-webkit-text-stroke:0;color:inherit;box-sizing:border-box;}
+#farmsie-layers-panel h2 {font-size:18px;margin:0 0 8px;}
+#farmsie-layers-panel p {font-size:13px;line-height:1.4;}
+#farmsie-layers-panel button {background:#365266;border:1px solid #678498;border-radius:8px;padding:8px;min-height:40px;margin:3px;font-size:13px;}
+#farmsie-layers-panel .layer-row {border:1px solid #455c70;border-radius:10px;padding:8px;margin:10px 0;}
+#farmsie-layers-panel .layer-row.selected {border:2px solid #44c8ff;background:#223f52;}
+#farmsie-layers-panel .layer-name {display:block;width:100%;margin:0 0 5px;text-align:left;font-weight:700;overflow-wrap:anywhere;}
+#farmsie-layers-panel label {font-size:13px;display:flex;gap:8px;align-items:center;margin:8px 0;}
+#farmsie-layers-panel input[type=range] {width:100%;min-width:0;}
+body:has(#farmsie-menu:not([hidden])) #farmsie-layers-button,body:has(#farmsie-menu:not([hidden])) #farmsie-layers-panel,body:has(#farmsie-insert-notice:not([hidden])) #farmsie-layers-button {display:none;}
+#farmsie-global-status {position:fixed;top:64px;left:10px;right:10px;z-index:800;background:#522a15;color:white;padding:12px;border-radius:10px;font:14px system-ui;}
+#farmsie-global-status[hidden] {display:none;}
+.farmsie-import-wrap {min-width:0;display:flex;flex-direction:column;gap:6px;}
+.farmsie-import-wrap > .farmsie-picture-card {width:100%;flex:1;}
+.farmsie-import-delete {background:#572b32;color:white;border:1px solid #a95c69;border-radius:10px;padding:10px;min-height:44px;font:600 14px system-ui;text-shadow:none;-webkit-text-stroke:0;}
+</style>
+<script>
+(() => {
+ const button=document.createElement('button');button.id='farmsie-layers-button';button.textContent='▱ Layers';button.type='button';button.setAttribute('aria-expanded','false');button.setAttribute('aria-controls','farmsie-layers-panel');
+ const panel=document.createElement('section');panel.id='farmsie-layers-panel';panel.hidden=true;panel.setAttribute('aria-label','Picture layers');
+ panel.innerHTML='<h2>Layers</h2><button type="button" id="farmsie-close-layers">Close</button><button type="button" id="farmsie-add-layer">+ New layer</button><button type="button" id="farmsie-copy-base">Copy original</button><p>Top layers appear above lower layers. Select a layer to paint, erase, smudge or transform it. Text and stickers each get their own layer.</p><div id="farmsie-layer-list"></div><p>🔒 Original picture — always kept underneath</p>';
+ document.body.append(button,panel);
+ function close(){panel.hidden=true;button.setAttribute('aria-expanded','false');}
+ button.onclick=()=>{panel.hidden=!panel.hidden;button.setAttribute('aria-expanded',String(!panel.hidden));if(!panel.hidden)document.querySelectorAll('#farmsie-tools details').forEach(d=>d.open=false);render();};
+ panel.querySelector('#farmsie-close-layers').onclick=close;
+ panel.querySelector('#farmsie-add-layer').onclick=()=>window.farmsieLayerAction('add');
+ panel.querySelector('#farmsie-copy-base').onclick=()=>window.farmsieLayerAction('copy-base');
+ function render(){
+  const info=window.farmsieLayerInfo?.(),list=panel.querySelector('#farmsie-layer-list');list.replaceChildren();
+  button.textContent='▱ Layers'+(info?' · '+info.layers.length:'');
+  if(!info){list.textContent='Open a picture to use layers.';return;}
+  [...info.layers].reverse().forEach((l,index)=>{
+    const row=document.createElement('div');row.className='layer-row'+(l.id===info.activeId?' selected':'');
+    function action(label,fn){const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=fn;row.append(b);return b;}
+    const select=action((l.id===info.activeId?'✓ ':'')+l.name,()=>window.farmsieLayerAction('select',l.id));select.className='layer-name';select.setAttribute('aria-pressed',String(l.id===info.activeId));
+    action(l.visible?'👁 Visible':'Hidden',()=>window.farmsieLayerAction('visible',l.id));
+    action('↑',()=>window.farmsieLayerAction('up',l.id)).disabled=index===0;
+    action('↓',()=>window.farmsieLayerAction('down',l.id)).disabled=index===info.layers.length-1;
+    action('Rename',()=>{const name=prompt('Layer name',l.name);if(name!==null)window.farmsieLayerAction('rename',l.id,name);});
+    action('Duplicate',()=>window.farmsieLayerAction('duplicate',l.id));
+    action('Delete',()=>{if(confirm('Delete layer “'+l.name+'”? You can Undo this change.'))window.farmsieLayerAction('delete',l.id);});
+    const label=document.createElement('label');label.textContent='Opacity '+Math.round(l.opacity*100)+'%';
+    const range=document.createElement('input');range.type='range';range.min=0;range.max=100;range.value=Math.round(l.opacity*100);range.setAttribute('aria-label',l.name+' opacity');range.onchange=()=>window.farmsieLayerAction('opacity',l.id,range.value/100);label.append(range);row.append(label);list.append(row);
+  });
+ }
+ window.addEventListener('farmsie-layers-updated',render);
+ document.getElementById('canvas-container').addEventListener('pointerdown',close,true);
+ document.getElementById('farmsie-tools').addEventListener('pointerdown',close,true);
+ document.addEventListener('keydown',e=>{if(e.key==='Escape')close();});
+ const status=document.createElement('div');status.id='farmsie-global-status';status.hidden=true;status.setAttribute('role','alert');document.body.append(status);
+ window.addEventListener('farmsie-save-error',e=>{status.textContent=e.detail+' Tap to dismiss.';status.hidden=false;});status.onclick=()=>status.hidden=true;
+ render();
+})();
+</script>
