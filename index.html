@@ -687,6 +687,8 @@ for(const [label,action] of [['Save PDF',()=>FarmsieFiles.download(FarmsieFiles.
   tools.setAttribute('aria-label', 'Farmsie coloring tools');
   tools.innerHTML = `
     <button type="button" data-tool="brush" class="active">🖌 Brush</button>
+    <button type="button" data-tool="smudge">🫧 Smudge</button>
+    <button type="button" data-tool="transform">↔ Transform</button>
     <button type="button" data-tool="erase">🧽 Eraser</button>
     <button type="button" data-tool="move">✋ Move</button>
     <label>Size <input id="farmsie-brush-size" type="range" min="1" max="40" value="3" step="1"></label>
@@ -701,6 +703,7 @@ for(const [label,action] of [['Save PDF',()=>FarmsieFiles.download(FarmsieFiles.
 
   let mode = 'brush';
   let pendingInsert = null;
+  let floating = null, selectionStart = null;
   let zoom = 1, panX = 0, panY = 0;
   let undo = [], redo = [];
   let originalPixels = null;
@@ -721,17 +724,20 @@ for(const [label,action] of [['Save PDF',()=>FarmsieFiles.download(FarmsieFiles.
     autoSaveCurrentPage();
   }
   tools.querySelector('#farmsie-undo').onclick = () => {
+    if(floating){cancelFloating();return;}
     if (!pageReady || !undo.length) return;
     redo.push(snapshot());
     restore(undo.pop());
   };
   tools.querySelector('#farmsie-redo').onclick = () => {
+    if(floating)cancelFloating();
     if (!pageReady || !redo.length) return;
     undo.push(snapshot());
     restore(redo.pop());
   };
   tools.querySelector('#farmsie-reset').onclick = () => {
     if (!pageReady || !confirm('Erase all colors on this page? Other pages stay saved.')) return;
+    cancelFloating();
     beginChange();
     ctx.clearRect(0, 0, art.width, art.height);
     ctx.drawImage(baseImage, 0, 0);
@@ -744,44 +750,101 @@ for(const [label,action] of [['Save PDF',()=>FarmsieFiles.download(FarmsieFiles.
   });
   tools.querySelectorAll('[data-tool]').forEach(button => {
     button.onclick = () => {
+      cancelFloating();
       pendingInsert = null;
       window.dispatchEvent(new Event('farmsie-insert-ended'));
       mode = button.dataset.tool;
+      if (mode === 'transform') announceTransform('Drag a box around the part you want to move.');
       tools.querySelectorAll('[data-tool]').forEach(b => b.classList.toggle('active', b === button));
     };
   });
 
+  const selectionBox = document.createElement('div');
+  selectionBox.id = 'farmsie-selection-box'; selectionBox.hidden = true;
+  selectionBox.style.cssText = 'position:fixed;pointer-events:none;border:2px dashed #00d9ff;box-sizing:border-box;z-index:34;';
+  document.body.append(selectionBox);
+  function announceTransform(message) {
+    window.dispatchEvent(new CustomEvent('farmsie-transform-status', {detail:message}));
+  }
+  function boxAt(x,y,w,h) {
+    const r=art.getBoundingClientRect(), sx=r.width/art.width, sy=r.height/art.height;
+    Object.assign(selectionBox.style,{left:(r.left+x*sx)+'px',top:(r.top+y*sy)+'px',width:(w*sx)+'px',height:(h*sy)+'px'});
+    selectionBox.hidden=false;
+  }
+  function drawFloating() {
+    if (!floating) return;
+    ctx.putImageData(floating.background,0,0);
+    ctx.drawImage(floating.image, floating.x, floating.y, floating.w, floating.h);
+    boxAt(floating.x,floating.y,floating.w,floating.h);
+  }
+  function cancelFloating(restore=true) {
+    if (floating && restore && floating.page===currentPage) ctx.putImageData(floating.before,0,0);
+    floating=null;selectionStart=null;selectionBox.hidden=true;pendingInsert=null;
+    if(mode==='transform'){
+      mode='brush';tools.querySelectorAll('[data-tool]').forEach(b=>b.classList.toggle('active',b.dataset.tool==='brush'));
+    }
+    window.dispatchEvent(new Event('farmsie-insert-ended'));
+  }
+  window.farmsieApplyTransform = () => {
+    if (!floating || !pageReady || touches.size) return false;
+    drawFloating();
+    undo.push(floating.before);if(undo.length>maxSteps())undo.shift();redo=[];
+    floating=null;selectionBox.hidden=true;selectionStart=null;mode='brush';
+    tools.querySelectorAll('[data-tool]').forEach(b=>b.classList.toggle('active',b.dataset.tool==='brush'));
+    autoSaveCurrentPage();window.dispatchEvent(new Event('farmsie-insert-ended'));return true;
+  };
+  window.farmsieResizeTransform = factor => {
+    if(!floating)return;
+    const w=Math.max(4,Math.min(art.width,floating.w*factor));
+    const h=w*floating.h/floating.w;
+    if(h>art.height || h<4)return;
+    floating.x=Math.max(0,Math.min(art.width-w,floating.x+(floating.w-w)/2));
+    floating.y=Math.max(0,Math.min(art.height-h,floating.y+(floating.h-h)/2));
+    floating.w=w;floating.h=h;drawFloating();
+  };
   window.farmsiePrepareInsert = item => {
     if (!pageReady || touches.size) return false;
-    const text = String(item.text || '').trim().slice(0, 100);
-    if (!text) return false;
-    pendingInsert = {text, size: Math.min(25, Math.max(2, Number(item.size) || 8)),
-      color: /^#[0-9a-f]{6}$/i.test(item.color) ? item.color : '#ff3b30',
-      font: item.sticker ? '"Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif' :
-        ({sans:'sans-serif',serif:'serif',mono:'monospace'}[item.font] || 'sans-serif')};
-    mode = 'insert';
-    tools.querySelectorAll('[data-tool]').forEach(b => b.classList.remove('active'));
-    return true;
-  };
-  function placeInsert(p) {
-    if (!pendingInsert) return;
-    startStroke();
-    ctx.save();
-    let size = Math.min(art.height * .7, art.width * pendingInsert.size / 100);
-    ctx.font = `${size}px ${pendingInsert.font}`;
-    const width = ctx.measureText(pendingInsert.text).width;
-    if (width > art.width * .9) size *= art.width * .9 / width;
-    ctx.font = `${size}px ${pendingInsert.font}`;
-    const halfWidth = ctx.measureText(pendingInsert.text).width / 2;
-    const x = Math.max(halfWidth, Math.min(art.width-halfWidth, p.x));
-    const y = Math.max(size, Math.min(art.height-size*.3, p.y));
-    ctx.fillStyle = pendingInsert.color;
-    ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
-    ctx.fillText(pendingInsert.text, x, y);
+    const text=String(item.text||'').trim().slice(0,100);if(!text)return false;
+    cancelFloating();
+    const color=/^#[0-9a-f]{6}$/i.test(item.color)?item.color:'#ff3b30';
+    const font=item.sticker?'"Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif':({sans:'sans-serif',serif:'serif',mono:'monospace'}[item.font]||'sans-serif');
+    let size=Math.min(art.height*.5,art.width*Math.min(25,Math.max(2,Number(item.size)||8))/100);
+    ctx.save();ctx.font=`${size}px ${font}`;
+    let width=ctx.measureText(text).width;
+    if(width>art.width*.85){size*=art.width*.85/width;ctx.font=`${size}px ${font}`;width=ctx.measureText(text).width;}
     ctx.restore();
-    pendingInsert = null; mode = 'brush';
-    tools.querySelector('[data-tool="brush"]').classList.add('active');
-    window.dispatchEvent(new Event('farmsie-insert-ended'));
+    const image=document.createElement('canvas');image.width=Math.ceil(width+size*.3);image.height=Math.ceil(size*1.5);
+    const c=image.getContext('2d');c.font=`${size}px ${font}`;c.fillStyle=color;c.textBaseline='alphabetic';c.fillText(text,size*.15,size*1.1);
+    const before=snapshot();
+    const visible=point({clientX:stage.getBoundingClientRect().left+stage.clientWidth/2,clientY:stage.getBoundingClientRect().top+stage.clientHeight/2});
+    floating={image,before,background:before,page:currentPage,w:image.width,h:image.height,
+      x:Math.max(0,Math.min(art.width-image.width,visible.x-image.width/2)),
+      y:Math.max(0,Math.min(art.height-image.height,visible.y-image.height/2))};
+    mode='transform';drawFloating();
+    tools.querySelectorAll('[data-tool]').forEach(b=>b.classList.toggle('active',b.dataset.tool==='transform'));
+    announceTransform('Drag the preview to position it, then tap Apply.');return true;
+  };
+  function selectArea(from,to) {
+    const x=Math.max(0,Math.floor(Math.min(from.x,to.x))),y=Math.max(0,Math.floor(Math.min(from.y,to.y)));
+    const w=Math.min(art.width-x,Math.ceil(Math.abs(from.x-to.x))),h=Math.min(art.height-y,Math.ceil(Math.abs(from.y-to.y)));
+    selectionBox.hidden=true;if(w<2||h<2)return;
+    const before=snapshot(),background=snapshot();
+    const image=document.createElement('canvas');image.width=w;image.height=h;
+    const c=image.getContext('2d'),cut=c.createImageData(w,h);
+    const whole=document.getElementById('farmsie-selection-kind')?.value==='whole';let count=0;
+    for(let yy=0;yy<h;yy++)for(let xx=0;xx<w;xx++){
+      const k=((y+yy)*art.width+x+xx)*4,n=(yy*w+xx)*4;
+      const changed=whole||[0,1,2,3].some(i=>before.data[k+i]!==originalPixels.data[k+i]);
+      if(!changed)continue;count++;
+      for(let i=0;i<4;i++){
+        cut.data[n+i]=before.data[k+i];
+        background.data[k+i]=whole?255:originalPixels.data[k+i];
+      }
+    }
+    if(!count){announceTransform('No added paint or text here. Select another area, or choose Whole picture area in More.');return;}
+    c.putImageData(cut,0,0);
+    floating={image,before,background,page:currentPage,x,y,w,h};drawFloating();
+    announceTransform('Drag the selection, resize if needed, then tap Apply.');
   }
 
   function limitPan() {
@@ -804,14 +867,16 @@ for(const [label,action] of [['Save PDF',()=>FarmsieFiles.download(FarmsieFiles.
     art.style.transformOrigin = '0 0';
     art.style.transform = `translate(${panX}px, ${panY}px) scale(${zoom})`;
     tools.querySelector('#farmsie-zoom-label').textContent = `${Math.round(zoom * 100)}%`;
+    if(floating)boxAt(floating.x,floating.y,floating.w,floating.h);
   }
   function setZoom(next, focusX = stage.clientWidth / 2, focusY = stage.clientHeight / 2) {
-    const z = Math.min(10, Math.max(0.1, next));
+    const z = Math.min(50, Math.max(0.1, next));
     panX = focusX - ((focusX - panX) / zoom) * z;
     panY = focusY - ((focusY - panY) / zoom) * z;
     zoom = z;
     renderView();
   }
+  window.farmsieSetZoom = percent => setZoom(Number(percent)/100);
   tools.querySelector('#farmsie-zoomin').onclick = () => setZoom(zoom * 1.5);
   tools.querySelector('#farmsie-zoomout').onclick = () => setZoom(zoom / 1.5);
   tools.querySelector('#farmsie-zoom-label').onclick = () => {
@@ -835,9 +900,10 @@ for(const [label,action] of [['Save PDF',()=>FarmsieFiles.download(FarmsieFiles.
     if (!pageReady || !boundaryMask || !originalPixels) return;
     const image = ctx.getImageData(0, 0, art.width, art.height);
     const d = image.data, o = originalPixels.data;
+    const smudgeSource = mode === 'smudge' ? new Uint8ClampedArray(d) : null;
     let painted = false;
     const radius = Math.max(1, Number(tools.querySelector('#farmsie-brush-size').value)
-      * art.width / stage.clientWidth / 2);
+      * art.width / stage.clientWidth / zoom / 2);
     const length = Math.hypot(to.x - from.x, to.y - from.y);
     const count = Math.max(1, Math.ceil(length / Math.max(1, radius / 2)));
     for (let j = 0; j <= count; j++) {
@@ -853,6 +919,15 @@ for(const [label,action] of [['Save PDF',()=>FarmsieFiles.download(FarmsieFiles.
           if (mode === 'erase') {
             d[k] = o[k]; d[k+1] = o[k+1];
             d[k+2] = o[k+2]; d[k+3] = o[k+3];
+          } else if (mode === 'smudge') {
+            if (!pageDetails[currentPage]?.importId && Math.max(o[k],o[k+1],o[k+2])<24) continue;
+            const dx=to.x-from.x,dy=to.y-from.y;
+            const distance=Math.hypot(dx,dy), reach=Math.min(radius*.7,distance);
+            const sx=Math.max(0,Math.min(art.width-1,Math.round(x-(distance?dx/distance*reach:0))));
+            const sy=Math.max(0,Math.min(art.height-1,Math.round(y-(distance?dy/distance*reach:0))));
+            const source=(sy*art.width+sx)*4;
+            const blend=.35*Math.max(0,1-Math.hypot(x-cx,y-cy)/radius);
+            for(let c=0;c<3;c++)d[k+c]=Math.round(d[k+c]*(1-blend)+smudgeSource[source+c]*blend);
           } else {
             if (d[k] !== selectedColor[0] || d[k+1] !== selectedColor[1] ||
                 d[k+2] !== selectedColor[2] || d[k+3] !== 255) painted = true;
@@ -883,6 +958,8 @@ for(const [label,action] of [['Save PDF',()=>FarmsieFiles.download(FarmsieFiles.
   }
   function cancelStroke() {
     if (gesture?.before) ctx.putImageData(gesture.before, 0, 0);
+    if(gesture?.floatStart && floating){Object.assign(floating,gesture.floatStart);drawFloating();}
+    if(selectionStart){selectionStart=null;selectionBox.hidden=true;}
     gesture = null;
     window.farmsieHaptics?.stop?.();
   }
@@ -903,6 +980,10 @@ for(const [label,action] of [['Save PDF',()=>FarmsieFiles.download(FarmsieFiles.
     if (pinch) return;
     gesture = {p: point(e), local: local(e), changed: false,
       tool: valid(point(e)) ? mode : 'move'};
+    if(gesture.tool==='transform'){
+      if(floating)gesture.floatStart={x:floating.x,y:floating.y};
+      else selectionStart=point(e);
+    }
   });
   stage.addEventListener('pointermove', e => {
     if (!touches.has(e.pointerId)) return;
@@ -912,7 +993,7 @@ for(const [label,action] of [['Save PDF',()=>FarmsieFiles.download(FarmsieFiles.
       const p = [...touches.values()].slice(0,2);
       const mid = {x:(p[0].x+p[1].x)/2, y:(p[0].y+p[1].y)/2};
       const dist = Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);
-      const z = Math.min(10, Math.max(0.1, pinch.zoom * dist / Math.max(1, pinch.distance)));
+      const z = Math.min(50, Math.max(0.1, pinch.zoom * dist / Math.max(1, pinch.distance)));
       zoom = z;
       panX = mid.x - (pinch.center.x - pinch.panX) * z / pinch.zoom;
       panY = mid.y - (pinch.center.y - pinch.panY) * z / pinch.zoom;
@@ -924,7 +1005,14 @@ for(const [label,action] of [['Save PDF',()=>FarmsieFiles.download(FarmsieFiles.
       panX += loc.x - gesture.local.x;
       panY += loc.y - gesture.local.y;
       renderView();
-    } else if (gesture.tool !== 'insert' && valid(here)) {
+    } else if (gesture.tool === 'transform') {
+      if(floating){
+        floating.x=Math.max(0,Math.min(art.width-floating.w,floating.x+here.x-gesture.p.x));
+        floating.y=Math.max(0,Math.min(art.height-floating.h,floating.y+here.y-gesture.p.y));drawFloating();
+      }else if(selectionStart){
+        boxAt(Math.min(selectionStart.x,here.x),Math.min(selectionStart.y,here.y),Math.abs(here.x-selectionStart.x),Math.abs(here.y-selectionStart.y));
+      }
+    } else if (valid(here)) {
       startStroke(); stroke(gesture.p, here);
     }
     gesture.p = here; gesture.local = loc;
@@ -940,9 +1028,10 @@ for(const [label,action] of [['Save PDF',()=>FarmsieFiles.download(FarmsieFiles.
     if (!gesture) return;
     if (cancelled) { cancelStroke(); return; }
     const p = point(e);
-    if (pageReady && gesture.tool !== 'move' && valid(p)) {
-      if (gesture.tool === 'insert') placeInsert(p);
-      else { startStroke(); stroke(gesture.p, p); }
+    if(pageReady && gesture.tool==='transform'){
+      if(selectionStart){selectArea(selectionStart,{x:Math.max(0,Math.min(art.width,p.x)),y:Math.max(0,Math.min(art.height,p.y))});selectionStart=null;}
+    }else if (pageReady && gesture.tool !== 'move' && valid(p)) {
+      startStroke(); stroke(gesture.p, p);
     }
     if (gesture.changed) {
       undo.push(gesture.before);
@@ -966,6 +1055,7 @@ for(const [label,action] of [['Save PDF',()=>FarmsieFiles.download(FarmsieFiles.
   // Capture original pixels whenever a new coloring-book image loads.
   function refreshOriginal() {
     if (!baseImage.complete || !baseImage.naturalWidth) return;
+    cancelFloating(false);
     const temp = document.createElement('canvas');
     temp.width = baseImage.naturalWidth; temp.height = baseImage.naturalHeight;
     const tctx = temp.getContext('2d', { willReadFrequently: true });
@@ -3061,7 +3151,7 @@ body #farmsie-tools #palette-container .color-btn {min-height:32px;width:32px;he
  const size=document.getElementById('farmsie-brush-size').closest('label');
  const color=document.getElementById('farmsie-custom-color').closest('label');
  const palette=document.getElementById('palette-container');
- draw.content.append(brush,size,color,palette);
+ draw.content.append(brush,tools.querySelector('[data-tool="smudge"]'),size,color,palette);
  tools.querySelectorAll(':scope > .farmsie-tool-panel').forEach(d=>d.remove());
  const remaining=[...tools.children].filter(e=>![erase,move,undo].includes(e));
  more.content.innerHTML=`<h3>Add text or a sticker</h3>
@@ -3069,23 +3159,31 @@ body #farmsie-tools #palette-container .color-btn {min-height:32px;width:32px;he
  <label>Style <select id="farmsie-text-font"><option value="sans">Simple</option><option value="serif">Classic</option><option value="mono">Typewriter</option></select>
  <input id="farmsie-text-color" type="color" value="#ff3b30" aria-label="Text color"></label>
  <label>Text / sticker size <input id="farmsie-insert-size" type="range" min="2" max="25" value="8" aria-label="Text and sticker size"></label>
- <button type="button" id="farmsie-place-text">Place text</button>
+ <button type="button" id="farmsie-place-text">Preview text</button>
  <div id="farmsie-stickers" aria-label="Choose a sticker"></div>
- <p id="farmsie-add-help" role="status">Choose a size, then tap your picture to place it. Undo removes it. Once placed, it becomes part of the picture.</p>
- <h3>History, zoom & settings</h3><div id="farmsie-extra-controls"></div>
+ <p id="farmsie-add-help" role="status">Choose a size, then drag the preview to the exact position and tap Apply. Later, use Transform to select and move it again.</p>
+ <h3>Move part of the picture</h3><label>Select <select id="farmsie-selection-kind"><option value="edits">Added paint, text & stickers</option><option value="whole">Whole picture area</option></select></label><p>Choose Transform, draw a box, then drag it. Whole picture area leaves white behind.</p><h3>History, zoom & settings</h3><div id="farmsie-extra-controls"></div>
  <h3>Save & activities</h3><div id="farmsie-export-controls"></div>`;
  more.content.querySelector('#farmsie-extra-controls').append(...remaining);
+ for(const percent of [1000,2500,5000]){
+  const b=document.createElement('button');b.type='button';b.textContent=percent.toLocaleString()+'% zoom';
+  b.onclick=()=>window.farmsieSetZoom(percent);more.content.querySelector('#farmsie-extra-controls').append(b);
+ }
  more.content.querySelector('#farmsie-export-controls').append(...document.querySelector('body > footer').children);
  tools.replaceChildren(draw.d,erase,move,undo,more.d);
  const notice=document.createElement('div');notice.id='farmsie-insert-notice';notice.hidden=true;notice.setAttribute('role','status');
- notice.append(document.createTextNode('Tap your picture to place it. '));
+ const message=document.createElement('span');message.textContent='Drag to position, then Apply. ';notice.append(message);
+ for(const [label,action] of [['− Size',()=>window.farmsieResizeTransform(.85)],['+ Size',()=>window.farmsieResizeTransform(1.15)],['✓ Apply',()=>window.farmsieApplyTransform()]]){const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=action;notice.append(b);}
  const cancel=document.createElement('button');cancel.textContent='Cancel';cancel.type='button';cancel.onclick=()=>brush.click();notice.append(cancel);document.body.append(notice);
  function close(){draw.d.open=false;more.d.open=false;}
  for(const d of [draw.d,more.d])d.addEventListener('toggle',()=>{if(d.open)(d===draw.d?more.d:draw.d).open=false;});
  document.getElementById('canvas-container').addEventListener('pointerdown',close,true);
  document.addEventListener('keydown',e=>{if(e.key==='Escape'){close();brush.click();}});
- for(const button of [brush,erase,move,undo])button.addEventListener('click',close);
+ for(const button of [brush,erase,move,undo,tools.querySelector('[data-tool="smudge"]')])button.addEventListener('click',close);
  window.addEventListener('farmsie-insert-ended',()=>notice.hidden=true);
+ window.addEventListener('farmsie-transform-status',e=>{message.textContent=e.detail+' ';notice.hidden=false;});
+ const transform=tools.querySelector('[data-tool="transform"]');transform.addEventListener('click',close);
+ document.getElementById('farmsie-export-controls').addEventListener('click',()=>window.farmsieApplyTransform(),true);
  function prepare(text,sticker=false){
   const ok=window.farmsiePrepareInsert({text,sticker,size:document.getElementById('farmsie-insert-size').value,
    color:document.getElementById('farmsie-text-color').value,font:document.getElementById('farmsie-text-font').value});
@@ -3099,3 +3197,9 @@ body #farmsie-tools #palette-container .color-btn {min-height:32px;width:32px;he
  window.dispatchEvent(new Event('resize'));
 })();
 </script>
+
+<style>
+#farmsie-insert-notice button {min-height:40px;border:0;border-radius:8px;margin:3px;padding:7px 10px;font:600 13px system-ui;background:#fff;color:#123;}
+#farmsie-insert-notice span {display:block;color:white;font:14px system-ui;text-shadow:none;-webkit-text-stroke:0;margin-bottom:5px;}
+body:has(#farmsie-menu:not([hidden])) #farmsie-insert-notice,body:has(#farmsie-menu:not([hidden])) #farmsie-selection-box {display:none;}
+</style>
