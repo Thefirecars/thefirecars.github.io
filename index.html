@@ -324,6 +324,7 @@ data-color="rgba(93,64,55,255)">
         if (tg) {
             tg.ready();
             tg.expand();
+            if (tg.isVersionAtLeast?.('7.7')) tg.disableVerticalSwipes?.();
         }
 
         const canvas = document.getElementById('coloring-canvas');
@@ -671,7 +672,9 @@ for(const [label,action] of [['Save PDF',()=>FarmsieFiles.download(FarmsieFiles.
   #farmsie-tools label { flex: 0 0 auto; display: flex; gap: 5px;
     align-items: center; font-size: 12px; color: #333; }
   #farmsie-tools input { width: 66px; }
-  #coloring-canvas { touch-action: none; }
+  html, body, #canvas-container { overscroll-behavior: none; }
+  #coloring-canvas { touch-action: none; -webkit-user-drag: none; }
+  #canvas-container { touch-action: none; }
 </style>
 <script>
 (() => {
@@ -808,16 +811,21 @@ for(const [label,action] of [['Save PDF',()=>FarmsieFiles.download(FarmsieFiles.
         for (let x = Math.max(0, Math.floor(cx - radius)); x <= Math.min(art.width-1, Math.ceil(cx+radius)); x++) {
           if ((x-cx)**2 + (y-cy)**2 > radius*radius) continue;
           const n = y * art.width + x;
-          if (boundaryMask[n]) continue;
           const k = n * 4;
+          // Tint the original paper, including antialiased edges. Pure black
+          // stays black; no expanded flood-fill mask can leave a white halo.
           if (mode === 'erase') {
             d[k] = o[k]; d[k+1] = o[k+1];
             d[k+2] = o[k+2]; d[k+3] = o[k+3];
           } else {
             if (d[k] !== selectedColor[0] || d[k+1] !== selectedColor[1] ||
                 d[k+2] !== selectedColor[2] || d[k+3] !== 255) painted = true;
-            d[k] = selectedColor[0]; d[k+1] = selectedColor[1];
-            d[k+2] = selectedColor[2]; d[k+3] = 255;
+            const alpha = o[k+3] / 255;
+            for (let c = 0; c < 3; c++) {
+              const paper = o[k+c] * alpha + 255 * (1-alpha);
+              d[k+c] = Math.round(selectedColor[c] * paper / 255);
+            }
+            d[k+3] = 255;
           }
         }
       }
@@ -826,23 +834,35 @@ for(const [label,action] of [['Save PDF',()=>FarmsieFiles.download(FarmsieFiles.
     if (painted && mode === 'brush') window.farmsieHaptics?.pulse();
   }
 
+  // Keep a provisional stroke until release, so a late second finger can
+  // restore it without consuming Undo or destroying Redo.
+  function startStroke() {
+    if (!gesture.changed) { gesture.before = snapshot(); gesture.changed = true; }
+  }
+  function cancelStroke() {
+    if (gesture?.before) ctx.putImageData(gesture.before, 0, 0);
+    gesture = null;
+    window.farmsieHaptics?.stop?.();
+  }
   function enterPinch() {
     if (touches.size < 2) return;
-    if (gesture?.changed) autoSaveCurrentPage();
-    gesture = null; // Pinching should not paint the picture.
+    cancelStroke();
     const p = [...touches.values()].slice(0, 2);
     pinch = { distance: Math.hypot(p[0].x-p[1].x, p[0].y-p[1].y),
       zoom, panX, panY, center: {x:(p[0].x+p[1].x)/2, y:(p[0].y+p[1].y)/2} };
   }
-  art.addEventListener('pointerdown', e => {
-    if (!pageReady) return;
+  stage.addEventListener('pointerdown', e => {
+    if (!pageReady || (e.pointerType === 'mouse' && e.button !== 0)) return;
     e.preventDefault();
-    art.setPointerCapture(e.pointerId);
+    stage.setPointerCapture(e.pointerId);
     touches.set(e.pointerId, local(e));
     if (touches.size >= 2) { enterPinch(); return; }
-    gesture = {p: point(e), local: local(e), start: local(e), moved: false, changed: false};
+    // After a pinch, ignore the remaining finger until all fingers lift.
+    if (pinch) return;
+    gesture = {p: point(e), local: local(e), changed: false,
+      tool: valid(point(e)) ? mode : 'move'};
   });
-  art.addEventListener('pointermove', e => {
+  stage.addEventListener('pointermove', e => {
     if (!touches.has(e.pointerId)) return;
     e.preventDefault();
     touches.set(e.pointerId, local(e));
@@ -856,16 +876,14 @@ for(const [label,action] of [['Save PDF',()=>FarmsieFiles.download(FarmsieFiles.
       panY = mid.y - (pinch.center.y - pinch.panY) * z / pinch.zoom;
       renderView(); return;
     }
-    if (!gesture) return;
+    if (!gesture || pinch) return;
     const here = point(e), loc = local(e);
-    if (Math.hypot(loc.x - gesture.start.x,loc.y - gesture.start.y) > 7) gesture.moved = true;
-    if (mode === 'move') {
+    if (gesture.tool === 'move') {
       panX += loc.x - gesture.local.x;
       panY += loc.y - gesture.local.y;
       renderView();
-    } else if ((mode === 'brush' || mode === 'erase') && valid(here)) {
-      if (!gesture.changed) { beginChange(); gesture.changed = true; }
-      stroke(gesture.p, here);
+    } else if (valid(here)) {
+      startStroke(); stroke(gesture.p, here);
     }
     gesture.p = here; gesture.local = loc;
   });
@@ -873,24 +891,32 @@ for(const [label,action] of [['Save PDF',()=>FarmsieFiles.download(FarmsieFiles.
     if (!touches.has(e.pointerId)) return;
     touches.delete(e.pointerId);
     if (pinch) {
-      if (touches.size < 2) { pinch = null; gesture = null; }
+      if (touches.size >= 2) enterPinch();
+      else if (!touches.size) pinch = null;
       return;
     }
     if (!gesture) return;
+    if (cancelled) { cancelStroke(); return; }
     const p = point(e);
-    if (!cancelled && pageReady && valid(p)) {
-      if (mode === 'fill' && !gesture.moved && !boundaryMask[Math.floor(p.y)*art.width+Math.floor(p.x)]) {
-        beginChange();
-        fillRegion(Math.floor(p.x), Math.floor(p.y), selectedColor);
-      } else if ((mode === 'brush' || mode === 'erase') && !gesture.changed) {
-        beginChange(); stroke(p, p); gesture.changed = true;
-      }
-      if (gesture.changed) autoSaveCurrentPage();
+    if (pageReady && gesture.tool !== 'move' && valid(p)) {
+      startStroke(); stroke(gesture.p, p);
+    }
+    if (gesture.changed) {
+      undo.push(gesture.before);
+      if (undo.length > maxSteps()) undo.shift();
+      redo = [];
+      autoSaveCurrentPage();
     }
     gesture = null;
   }
-  art.addEventListener('pointerup', e => finish(e));
-  art.addEventListener('pointercancel', e => finish(e, true));
+  stage.addEventListener('pointerup', e => finish(e));
+  stage.addEventListener('pointercancel', e => finish(e, true));
+  stage.addEventListener('lostpointercapture', e => finish(e, true));
+  stage.addEventListener('touchmove', e => e.preventDefault(), {passive:false});
+  art.addEventListener('dragstart', e => e.preventDefault());
+  window.addEventListener('blur', () => {
+    cancelStroke(); touches.clear(); pinch = null;
+  });
   // Block the old tap handler: this replaces its input handling, not its coloring algorithm.
   art.addEventListener('click', e => { e.preventDefault(); e.stopImmediatePropagation(); }, true);
 
