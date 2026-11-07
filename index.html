@@ -820,10 +820,16 @@ for(const [label,action] of [['Save PDF',()=>FarmsieFiles.download(FarmsieFiles.
           } else {
             if (d[k] !== selectedColor[0] || d[k+1] !== selectedColor[1] ||
                 d[k+2] !== selectedColor[2] || d[k+3] !== 255) painted = true;
-            const alpha = o[k+3] / 255;
-            for (let c = 0; c < 3; c++) {
-              const paper = o[k+c] * alpha + 255 * (1-alpha);
-              d[k+c] = Math.round(selectedColor[c] * paper / 255);
+            if (pageDetails[currentPage]?.importId) {
+              // Personal pictures are paint-over surfaces, including dark areas.
+              d[k] = selectedColor[0]; d[k+1] = selectedColor[1];
+              d[k+2] = selectedColor[2];
+            } else {
+              const alpha = o[k+3] / 255;
+              for (let c = 0; c < 3; c++) {
+                const paper = o[k+c] * alpha + 255 * (1-alpha);
+                d[k+c] = Math.round(selectedColor[c] * paper / 255);
+              }
             }
             d[k+3] = 255;
           }
@@ -1234,7 +1240,7 @@ for(const [label,action] of [['Save PDF',()=>FarmsieFiles.download(FarmsieFiles.
     const importMessage = document.createElement('p');
     importMessage.setAttribute('role', 'status');
     importMessage.style.cssText = 'font:16px/1.5 system-ui;color:white;margin:10px 0 0;';
-    importMessage.textContent = 'Add your picture to My Imports and use all the coloring tools. Saved in this browser on this device.';
+    importMessage.textContent = 'Import a picture and paint over any part of it with Brush. Eraser restores your original picture. Saved in My Imports on this device.';
     importPanel.append(importButton, picker, importMessage);
     grid.before(importPanel);
     importButton.onclick = () => picker.click();
@@ -1837,21 +1843,7 @@ book.pages.forEach((pageNumber, index) => {
   bg.fillStyle = "white";
   bg.fillRect(0, 0, SIZE, SIZE);
 
-  // Add upload button to existing gallery.
-
-  const openButton = document.createElement("button");
-
-  openButton.id = "farmsie-upload-button";
-
-  openButton.textContent = "📷 Paint Your Own Photo";
-
-  gallery.querySelector(
-    "#farmsie-picture-grid"
-  ).before(openButton);
-
-  openButton.onclick = () => {
-    screen.hidden = false;
-  };
+  // Imports now use the main workspace; the duplicate gallery entry is retired.
 
   document.getElementById(
     "farmsie-paint-back"
