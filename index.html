@@ -982,18 +982,9 @@ for(const [label,action] of [['Save PDF',()=>FarmsieFiles.download(FarmsieFiles.
             const sx=Math.max(0,Math.min(art.width-1,Math.round(x-(length?dx/length*reach:0))));
             const sy=Math.max(0,Math.min(art.height-1,Math.round(y-(length?dy/length*reach:0))));
             const source=(sy*art.width+sx)*4,b=.85*opacity*Math.sqrt(1-distance/radius);
-            // Paint contains the original outline's shading. Never pick up or
-            // alter outline pixels, including their antialiased gray edges.
-            // This mask comes from the ORIGINAL, so user-painted black still blends.
-            if(keepLines && (Math.min(original[k],original[k+1],original[k+2])<250 ||
-              Math.min(original[source],original[source+1],original[source+2])<250))continue;
             const a=d[k+3]/255,sa=smudge[source+3]/255,out=a*(1-b)+sa*b;
-            for(let c=0;c<3;c++){
-              // Remove any near-white paper shading from the carried pigment,
-              // then reapply the destination's original shading in place.
-              const carried=keepLines?Math.min(255,smudge[source+c]*255/original[source+c])*original[k+c]/255:smudge[source+c];
-              d[k+c]=out?Math.round((d[k+c]*a*(1-b)+carried*sa*b)/out):0;
-            }
+            for(let c=0;c<3;c++)d[k+c]=out?Math.round((d[k+c]*a*(1-b)+smudge[source+c]*sa*b)/out):0;
+            if(keepLines && Math.max(original[k],original[k+1],original[k+2])<24)d[k]=d[k+1]=d[k+2]=0;
             d[k+3]=Math.round(out*255);continue;
           }
           let amount=opacity*Math.min(1,Math.max(0,radius-distance+.5));
