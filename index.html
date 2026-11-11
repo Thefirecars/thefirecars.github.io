@@ -736,7 +736,7 @@ for(const [label,action] of [['Save PDF',()=>FarmsieFiles.download(FarmsieFiles.
     <button type="button" data-tool="smudge">🫧 Smudge</button>
     <button type="button" data-tool="erase">🧽 Eraser</button>
     <button type="button" data-tool="move">✋ Move</button>
-    <label>Size <input id="farmsie-brush-size" type="range" min="1" max="40" value="3" step="1"></label>
+    <label>Size <input id="farmsie-brush-size" type="range" min="1" max="100" value="10" step="1"></label>
     <label>🎨 <input id="farmsie-custom-color" aria-label="Choose a custom color" type="color" value="#ff3b30"></label>
     <button type="button" id="farmsie-undo">↶ Undo</button>
     <button type="button" id="farmsie-redo">↷ Redo</button>
@@ -816,7 +816,7 @@ for(const [label,action] of [['Save PDF',()=>FarmsieFiles.download(FarmsieFiles.
     selectedColor = [1, 3, 5].map(i => parseInt(hex.slice(i, i+2), 16)).concat(255);
     document.querySelector('.color-btn.active')?.classList.remove('active');
   });
-  const toolSettings={brush:[3,100],pencil:[2,85],crayon:[12,85],highlighter:[18,100],airbrush:[28,75],smudge:[18,85],erase:[12,100]};
+  const toolSettings={brush:[10,100],pencil:[4,95],crayon:[20,95],highlighter:[24,100],airbrush:[36,95],smudge:[24,100],erase:[20,100]};
   let previousPaintTool='brush';
   function selectTool(next){
     const size=tools.querySelector('#farmsie-brush-size'),alpha=tools.querySelector('#farmsie-brush-opacity');
@@ -824,8 +824,19 @@ for(const [label,action] of [['Save PDF',()=>FarmsieFiles.download(FarmsieFiles.
     if(next==='eyedropper' && toolSettings[mode] && mode!=='erase')previousPaintTool=mode;
     mode=next;
     if(toolSettings[mode])[size.value,alpha.value]=toolSettings[mode];
+    updateToolReadouts();
     tools.querySelectorAll('[data-tool]').forEach(b=>{b.classList.toggle('active',b.dataset.tool===mode);b.setAttribute('aria-pressed',String(b.dataset.tool===mode));});
   }
+  const sizeInput=tools.querySelector('#farmsie-brush-size'),opacityInput=tools.querySelector('#farmsie-brush-opacity');
+  const sizeReadout=document.createElement('output'),opacityReadout=document.createElement('output');
+  sizeInput.after(sizeReadout);opacityInput.after(opacityReadout);
+  function updateToolReadouts(){
+    sizeReadout.textContent=sizeInput.value;
+    opacityReadout.textContent=opacityInput.value+'%';
+    opacityInput.parentElement.firstChild.textContent=mode==='smudge'?'Strength ':'Opacity ';
+  }
+  sizeInput.addEventListener('input',updateToolReadouts);opacityInput.addEventListener('input',updateToolReadouts);
+  updateToolReadouts();
   tools.querySelectorAll('[data-tool]').forEach(button=>button.onclick=()=>{cancelStroke();cancelFloating();selectTool(button.dataset.tool);});
 
   const selectionBox = document.createElement('div');
@@ -920,6 +931,30 @@ for(const [label,action] of [['Save PDF',()=>FarmsieFiles.download(FarmsieFiles.
   }
   function valid(p) { return p.x >= 0 && p.y >= 0 && p.x < art.width && p.y < art.height; }
 
+  function toolRadius(tool,size,width,displayWidth,zoom){
+    const factor=tool==='pencil'?.45:tool==='smudge'?1.6:1;
+    const minimum=tool==='airbrush'?2:tool==='smudge'?3:.85;
+    return Math.max(minimum,size*width/Math.max(1,displayWidth)/Math.sqrt(Math.max(1,zoom))/2*factor);
+  }
+  // Only completed, visible pigment changes qualify. Pinch/cancel rolls back first.
+  const coloringVisitKey='farmsie-coloring-started-v1';
+  let coloringStarted=false,coloringPending=false;
+  try{coloringStarted=sessionStorage.getItem(coloringVisitKey)==='1';}catch{}
+  function sendColoringStarted(){
+    if(coloringStarted || !coloringPending || typeof window.umami?.track!=='function')return;
+    coloringStarted=true;
+    try{
+      const sent=window.umami.track('Coloring started');
+      try{sessionStorage.setItem(coloringVisitKey,'1');}catch{}
+      Promise.resolve(sent).catch(()=>{coloringStarted=false;try{sessionStorage.removeItem(coloringVisitKey);}catch{}});
+    }catch{coloringStarted=false;}
+  }
+  function trackCompletedColoring(completed){
+    if(!completed?.inkChanged || !['brush','pencil','crayon','highlighter','airbrush'].includes(completed.tool))return;
+    coloringPending=true;sendColoringStarted();
+  }
+  document.querySelector('script[src*="cloud.umami.is/script.js"]')?.addEventListener('load',sendColoringStarted);
+
   // Brush and eraser draw continuously as the user slides a finger or stylus.
   // Black outlines are never overwritten, and eraser restores the original art.
   function stroke(from, to) {
@@ -930,7 +965,8 @@ for(const [label,action] of [['Save PDF',()=>FarmsieFiles.download(FarmsieFiles.
     const original=originalPixels.data;
     const size=Number(tools.querySelector('#farmsie-brush-size').value);
     const opacity=Number(tools.querySelector('#farmsie-brush-opacity').value)/100;
-    const radius=Math.max(.5,size*art.width/stage.clientWidth/zoom/2*(mode==='pencil'?.4:mode==='smudge'?1.6:1));
+    // Scale against the actual displayed image, retaining a useful footprint at high zoom.
+    const radius=toolRadius(mode,size,art.width,art.clientWidth||stage.clientWidth,zoom);
     const dx=to.x-from.x,dy=to.y-from.y,length=Math.hypot(dx,dy);
     const count=Math.max(1,Math.ceil(length/Math.max(.5,radius/3)));
     if(!gesture.coverage)gesture.coverage=new Float32Array(art.width*art.height);
@@ -965,12 +1001,15 @@ for(const [label,action] of [['Save PDF',()=>FarmsieFiles.download(FarmsieFiles.
           const ink=Math.min(1,(amount-previous)/Math.max(.0001,1-previous));
           if(mode==='erase'){d[k+3]=Math.round(d[k+3]*(1-ink));continue;}
           const a=d[k+3]/255,out=ink+a*(1-ink);
+          const beforeVisible=[0,1,2].map(c=>Math.round(d[k+c]*a+original[k+c]*(1-a)));
           for(let c=0;c<3;c++){
             const visible=d[k+c]*a+original[k+c]*(1-a);
             const color=mode==='highlighter'?visible*selectedColor[c]/255:(keepLines?selectedColor[c]*original[k+c]/255:selectedColor[c]);
             d[k+c]=Math.round((color*ink+d[k+c]*a*(1-ink))/out);
           }
           d[k+3]=Math.round(out*255);
+          const afterAlpha=d[k+3]/255;
+          if([0,1,2].some(c=>Math.round(d[k+c]*afterAlpha+original[k+c]*(1-afterAlpha))!==beforeVisible[c]))gesture.inkChanged=true;
         }
       }
     }
@@ -1074,6 +1113,7 @@ for(const [label,action] of [['Save PDF',()=>FarmsieFiles.download(FarmsieFiles.
       if (undo.length > maxSteps()) undo.shift();
       redo = [];
       notifyLayers();autoSaveCurrentPage();
+      trackCompletedColoring(gesture);
     }
     gesture = null;
   }
