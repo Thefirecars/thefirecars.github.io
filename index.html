@@ -734,7 +734,6 @@ for(const [label,action] of [['Save PDF',()=>FarmsieFiles.download(FarmsieFiles.
     <button type="button" data-tool="eyedropper">💧 Eyedropper</button>
     <label>Opacity <input id="farmsie-brush-opacity" type="range" min="5" max="100" value="100" aria-label="Tool opacity"></label>
     <button type="button" data-tool="smudge">🫧 Smudge</button>
-    <button type="button" data-tool="transform">↔ Transform</button>
     <button type="button" data-tool="erase">🧽 Eraser</button>
     <button type="button" data-tool="move">✋ Move</button>
     <label>Size <input id="farmsie-brush-size" type="range" min="1" max="40" value="3" step="1"></label>
@@ -773,32 +772,16 @@ for(const [label,action] of [['Save PDF',()=>FarmsieFiles.download(FarmsieFiles.
       const layer=stack.add(saved?.png?'Previous artwork':'Paint 1',saved?.png?'source-over':paintBlend());
       if(saved?.png)layer.canvas.getContext('2d').drawImage(art,0,0);
     }
+    if(stack.layers.length>1 || stack.layers[0]?.opacity!==1 || !stack.layers[0]?.visible){
+      const flat=stack.surface(), fc=flat.getContext('2d');
+      for(const l of stack.layers){if(!l.visible)continue;fc.globalAlpha=l.opacity;fc.globalCompositeOperation=l.blend;fc.drawImage(l.canvas,0,0);}
+      stack.layers=[];const paint=stack.add('Paint');paint.canvas.getContext('2d').drawImage(flat,0,0);
+    }
     if(generation!==pageLoadGeneration)return;
     layers=stack;layers.render(ctx);undo=[];redo=[];notifyLayers();
   };
   window.farmsieSerializeLayers = () => layers?.serialize();
   window.farmsieBeforePageChange = () => {cancelStroke();cancelFloating();layers=null;notifyLayers();};
-  window.farmsieLayerInfo = () => layers ? {activeId:layers.activeId,layers:layers.layers.map(({canvas,...meta})=>meta)} : null;
-  window.farmsieLayerAction = (action,id,value) => {
-    if(!pageReady || !layers || touches.size)return;
-    cancelFloating();
-    if(action==='select'){if(layers.layers.some(l=>l.id===id))layers.activeId=id;notifyLayers();return;}
-    const before=snapshot();
-    try{
-      const l=layers.layers.find(l=>l.id===id);
-      if(action==='add')layers.add('Paint '+(layers.serial+1),paintBlend());
-      if(action==='copy-base'){const copy=layers.add('Original copy');copy.canvas.getContext('2d').drawImage(layers.base,0,0);}
-      if(action==='duplicate')layers.duplicate(id);
-      if(action==='delete')layers.remove(id);
-      if(action==='rename' && l)l.name=String(value).trim().slice(0,60)||l.name;
-      if(action==='visible' && l)l.visible=!l.visible;
-      if(action==='opacity' && l)l.opacity=Math.min(1,Math.max(0,Number(value)));
-      if(action==='up')layers.move(id,1);
-      if(action==='down')layers.move(id,-1);
-      undo.push(before);if(undo.length>maxSteps())undo.shift();redo=[];
-      layers.render(ctx);notifyLayers();autoSaveCurrentPage();
-    }catch(error){applySnapshot(before);window.dispatchEvent(new CustomEvent('farmsie-save-error',{detail:error.message}));}
-  };
   function beginChange() {
     undo.push(snapshot());
     if (undo.length > maxSteps()) undo.shift();
@@ -833,16 +816,17 @@ for(const [label,action] of [['Save PDF',()=>FarmsieFiles.download(FarmsieFiles.
     selectedColor = [1, 3, 5].map(i => parseInt(hex.slice(i, i+2), 16)).concat(255);
     document.querySelector('.color-btn.active')?.classList.remove('active');
   });
-  tools.querySelectorAll('[data-tool]').forEach(button => {
-    button.onclick = () => {
-      cancelFloating();
-      pendingInsert = null;
-      window.dispatchEvent(new Event('farmsie-insert-ended'));
-      mode = button.dataset.tool;
-      if (mode === 'transform') announceTransform('Drag a box around the part you want to move.');
-      tools.querySelectorAll('[data-tool]').forEach(b => b.classList.toggle('active', b === button));
-    };
-  });
+  const toolSettings={brush:[3,100],pencil:[2,85],crayon:[12,85],highlighter:[18,100],airbrush:[28,75],smudge:[18,85],erase:[12,100]};
+  let previousPaintTool='brush';
+  function selectTool(next){
+    const size=tools.querySelector('#farmsie-brush-size'),alpha=tools.querySelector('#farmsie-brush-opacity');
+    if(toolSettings[mode])toolSettings[mode]=[Number(size.value),Number(alpha.value)];
+    if(next==='eyedropper' && toolSettings[mode] && mode!=='erase')previousPaintTool=mode;
+    mode=next;
+    if(toolSettings[mode])[size.value,alpha.value]=toolSettings[mode];
+    tools.querySelectorAll('[data-tool]').forEach(b=>{b.classList.toggle('active',b.dataset.tool===mode);b.setAttribute('aria-pressed',String(b.dataset.tool===mode));});
+  }
+  tools.querySelectorAll('[data-tool]').forEach(button=>button.onclick=()=>{cancelStroke();cancelFloating();selectTool(button.dataset.tool);});
 
   const selectionBox = document.createElement('div');
   selectionBox.id = 'farmsie-selection-box'; selectionBox.hidden = true;
@@ -889,49 +873,6 @@ for(const [label,action] of [['Save PDF',()=>FarmsieFiles.download(FarmsieFiles.
     floating.y=Math.max(0,Math.min(art.height-h,floating.y+(floating.h-h)/2));
     floating.w=w;floating.h=h;drawFloating();
   };
-  window.farmsiePrepareInsert = item => {
-    if (!pageReady || touches.size) return false;
-    const text=String(item.text||'').trim().slice(0,100);if(!text)return false;
-    cancelFloating();
-    const color=/^#[0-9a-f]{6}$/i.test(item.color)?item.color:'#ff3b30';
-    const font=item.sticker?'"Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif':({sans:'sans-serif',serif:'serif',mono:'monospace'}[item.font]||'sans-serif');
-    let size=Math.min(art.height*.5,art.width*Math.min(25,Math.max(2,Number(item.size)||8))/100);
-    ctx.save();ctx.font=`${size}px ${font}`;
-    let width=ctx.measureText(text).width;
-    if(width>art.width*.85){size*=art.width*.85/width;ctx.font=`${size}px ${font}`;width=ctx.measureText(text).width;}
-    ctx.restore();
-    const image=document.createElement('canvas');image.width=Math.ceil(width+size*.3);image.height=Math.ceil(size*1.5);
-    const c=image.getContext('2d');c.font=`${size}px ${font}`;c.fillStyle=color;c.textBaseline='alphabetic';c.fillText(text,size*.15,size*1.1);
-    const before=snapshot();
-    try{layers.add(item.sticker?'Sticker '+text:'Text: '+text.slice(0,25));}catch(error){window.dispatchEvent(new CustomEvent('farmsie-save-error',{detail:error.message}));return false;}
-    notifyLayers();
-    const background=activeContext().getImageData(0,0,art.width,art.height);
-    const visible=point({clientX:stage.getBoundingClientRect().left+stage.clientWidth/2,clientY:stage.getBoundingClientRect().top+stage.clientHeight/2});
-    floating={image,before,background,page:currentPage,w:image.width,h:image.height,
-      x:Math.max(0,Math.min(art.width-image.width,visible.x-image.width/2)),
-      y:Math.max(0,Math.min(art.height-image.height,visible.y-image.height/2))};
-    mode='transform';drawFloating();
-    tools.querySelectorAll('[data-tool]').forEach(b=>b.classList.toggle('active',b.dataset.tool==='transform'));
-    announceTransform('Drag the preview to position it, then tap Apply.');return true;
-  };
-  function selectArea(from,to) {
-    const x=Math.max(0,Math.floor(Math.min(from.x,to.x))),y=Math.max(0,Math.floor(Math.min(from.y,to.y)));
-    const w=Math.min(art.width-x,Math.ceil(Math.abs(from.x-to.x))),h=Math.min(art.height-y,Math.ceil(Math.abs(from.y-to.y)));
-    selectionBox.hidden=true;if(w<2||h<2)return;
-    if(!layers?.active?.visible){announceTransform('Choose a visible layer in Layers first.');return;}
-    const before=snapshot(),target=activeContext();
-    const background=target.getImageData(0,0,art.width,art.height);
-    const image=document.createElement('canvas');image.width=w;image.height=h;
-    const c=image.getContext('2d'),cut=target.getImageData(x,y,w,h);
-    if(!cut.data.some((v,i)=>i%4===3&&v)){announceTransform('This part of the selected layer is empty. Choose the right layer first.');return;}
-    c.putImageData(cut,0,0);
-    for(let yy=y;yy<y+h;yy++)for(let xx=x;xx<x+w;xx++){
-      const k=(yy*art.width+xx)*4;background.data.fill(0,k,k+4);
-    }
-    floating={image,before,background,page:currentPage,x,y,w,h};drawFloating();
-    announceTransform('Drag the selection, resize if needed, then tap Apply.');
-  }
-
   function limitPan() {
     const visible = 40;
     const width = art.clientWidth * zoom;
@@ -983,12 +924,13 @@ for(const [label,action] of [['Save PDF',()=>FarmsieFiles.download(FarmsieFiles.
   // Black outlines are never overwritten, and eraser restores the original art.
   function stroke(from, to) {
     if (!pageReady || !layers?.active?.visible || !gesture) return;
+    const mode=gesture.tool;
     const target=activeContext(),image=target.getImageData(0,0,art.width,art.height),d=image.data;
     const keepLines=!pageDetails[currentPage]?.importId;
     const original=originalPixels.data;
     const size=Number(tools.querySelector('#farmsie-brush-size').value);
     const opacity=Number(tools.querySelector('#farmsie-brush-opacity').value)/100;
-    const radius=Math.max(.5,size*art.width/stage.clientWidth/zoom/2*(mode==='pencil'?.3:1));
+    const radius=Math.max(.5,size*art.width/stage.clientWidth/zoom/2*(mode==='pencil'?.4:mode==='smudge'?1.6:1));
     const dx=to.x-from.x,dy=to.y-from.y,length=Math.hypot(dx,dy);
     const count=Math.max(1,Math.ceil(length/Math.max(.5,radius/3)));
     if(!gesture.coverage)gesture.coverage=new Float32Array(art.width*art.height);
@@ -1003,18 +945,20 @@ for(const [label,action] of [['Save PDF',()=>FarmsieFiles.download(FarmsieFiles.
             const reach=Math.min(radius*.7,length);
             const sx=Math.max(0,Math.min(art.width-1,Math.round(x-(length?dx/length*reach:0))));
             const sy=Math.max(0,Math.min(art.height-1,Math.round(y-(length?dy/length*reach:0))));
-            const source=(sy*art.width+sx)*4,b=.35*opacity*(1-distance/radius);
+            const source=(sy*art.width+sx)*4,b=.85*opacity*Math.sqrt(1-distance/radius);
             const a=d[k+3]/255,sa=smudge[source+3]/255,out=a*(1-b)+sa*b;
             for(let c=0;c<3;c++)d[k+c]=out?Math.round((d[k+c]*a*(1-b)+smudge[source+c]*sa*b)/out):0;
             if(keepLines && Math.max(original[k],original[k+1],original[k+2])<24)d[k]=d[k+1]=d[k+2]=0;
             d[k+3]=Math.round(out*255);continue;
           }
-          let amount=opacity;
+          let amount=opacity*Math.min(1,Math.max(0,radius-distance+.5));
+          const grain=((Math.imul(x+17,374761393)^Math.imul(y+31,668265263))>>>0)%100/100;
+          if(mode==='pencil')amount*=.45+.55*grain;
           if(mode==='highlighter')amount*=.28;
-          if(mode==='airbrush')amount*=.24*Math.pow(1-distance/radius,2);
+          if(mode==='airbrush')amount*=.65*Math.pow(1-distance/radius,2);
           if(mode==='crayon'){
             const grain=((Math.imul(x+17,374761393)^Math.imul(y+31,668265263))>>>0)%100/100;
-            amount*=grain<.22?0:.25+.75*grain;
+            amount*=grain<.32?0:.18+.7*grain;
           }
           const previous=gesture.coverage[n];if(amount<=previous)continue;
           gesture.coverage[n]=amount;
@@ -1022,7 +966,8 @@ for(const [label,action] of [['Save PDF',()=>FarmsieFiles.download(FarmsieFiles.
           if(mode==='erase'){d[k+3]=Math.round(d[k+3]*(1-ink));continue;}
           const a=d[k+3]/255,out=ink+a*(1-ink);
           for(let c=0;c<3;c++){
-            const color=keepLines?selectedColor[c]*original[k+c]/255:selectedColor[c];
+            const visible=d[k+c]*a+original[k+c]*(1-a);
+            const color=mode==='highlighter'?visible*selectedColor[c]/255:(keepLines?selectedColor[c]*original[k+c]/255:selectedColor[c]);
             d[k+c]=Math.round((color*ink+d[k+c]*a*(1-ink))/out);
           }
           d[k+3]=Math.round(out*255);
@@ -1120,7 +1065,7 @@ for(const [label,action] of [['Save PDF',()=>FarmsieFiles.download(FarmsieFiles.
       selectedColor=[picked[0],picked[1],picked[2],255];
       tools.querySelector('#farmsie-custom-color').value='#'+selectedColor.slice(0,3).map(c=>c.toString(16).padStart(2,'0')).join('');
       document.querySelector('.color-btn.active')?.classList.remove('active');
-      tools.querySelector('[data-tool="brush"]').click();
+      selectTool(previousPaintTool);
     }else if (pageReady && gesture.tool !== 'move' && valid(p) && layers?.active?.visible) {
       startStroke(); stroke(gesture.p, p);
     }
@@ -1454,7 +1399,7 @@ for(const [label,action] of [['Save PDF',()=>FarmsieFiles.download(FarmsieFiles.
     async function deleteImport(number,button){
       if(deletingImport || importButton.disabled)return;
       const info=pageDetails[number];if(!info?.importId)return;
-      if(!confirm('Delete “'+info.name+'” from My Imports and remove its saved artwork and layers? Your original file on your phone will not be deleted.'))return;
+      if(!confirm('Delete “'+info.name+'” from My Imports and remove its saved artwork? Your original file on your phone will not be deleted.'))return;
       deletingImport=true;button.disabled=true;importButton.disabled=true;
       try{
         await saveQueue;
@@ -3279,16 +3224,7 @@ body #farmsie-tools #palette-container .color-btn {min-height:32px;width:32px;he
  draw.content.append(brush,...['pencil','crayon','highlighter','airbrush','eyedropper','smudge'].map(name=>tools.querySelector('[data-tool="'+name+'"]')),size,document.getElementById('farmsie-brush-opacity').closest('label'),color,palette);
  tools.querySelectorAll(':scope > .farmsie-tool-panel').forEach(d=>d.remove());
  const remaining=[...tools.children].filter(e=>![erase,move,undo].includes(e));
- more.content.innerHTML=`<h3>Add text or a sticker</h3>
- <label>Text <input id="farmsie-add-text" type="text" maxlength="100" placeholder="Write something…"></label>
- <label>Style <select id="farmsie-text-font"><option value="sans">Simple</option><option value="serif">Classic</option><option value="mono">Typewriter</option></select>
- <input id="farmsie-text-color" type="color" value="#ff3b30" aria-label="Text color"></label>
- <label>Text / sticker size <input id="farmsie-insert-size" type="range" min="2" max="25" value="8" aria-label="Text and sticker size"></label>
- <button type="button" id="farmsie-place-text">Preview text</button>
- <div id="farmsie-stickers" aria-label="Choose a sticker"></div>
- <p id="farmsie-add-help" role="status">Choose a size, then drag the preview to the exact position and tap Apply. Later, use Transform to select and move it again.</p>
- <h3>Move part of the picture</h3><p>Choose a layer using the separate Layers button, then choose Transform, draw a box, and drag it. To move the original, first use Layers → Copy original.</p><h3>History, zoom & settings</h3><div id="farmsie-extra-controls"></div>
- <h3>Save & activities</h3><div id="farmsie-export-controls"></div>`;
+ more.content.innerHTML=`<h3>History, zoom & settings</h3><div id="farmsie-extra-controls"></div><h3>Save & activities</h3><div id="farmsie-export-controls"></div>`;
  more.content.querySelector('#farmsie-extra-controls').append(...remaining);
  for(const percent of [1000,2500,5000]){
   const b=document.createElement('button');b.type='button';b.textContent=percent.toLocaleString()+'% zoom';
@@ -3296,29 +3232,11 @@ body #farmsie-tools #palette-container .color-btn {min-height:32px;width:32px;he
  }
  more.content.querySelector('#farmsie-export-controls').append(...document.querySelector('body > footer').children);
  tools.replaceChildren(draw.d,erase,move,undo,more.d);
- const notice=document.createElement('div');notice.id='farmsie-insert-notice';notice.hidden=true;notice.setAttribute('role','status');
- const message=document.createElement('span');message.textContent='Drag to position, then Apply. ';notice.append(message);
- for(const [label,action] of [['− Size',()=>window.farmsieResizeTransform(.85)],['+ Size',()=>window.farmsieResizeTransform(1.15)],['✓ Apply',()=>window.farmsieApplyTransform()]]){const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=action;notice.append(b);}
- const cancel=document.createElement('button');cancel.textContent='Cancel';cancel.type='button';cancel.onclick=()=>brush.click();notice.append(cancel);document.body.append(notice);
  function close(){draw.d.open=false;more.d.open=false;}
  for(const d of [draw.d,more.d])d.addEventListener('toggle',()=>{if(d.open)(d===draw.d?more.d:draw.d).open=false;});
  document.getElementById('canvas-container').addEventListener('pointerdown',close,true);
  document.addEventListener('keydown',e=>{if(e.key==='Escape'){close();brush.click();}});
  for(const button of [brush,erase,move,undo,...['pencil','crayon','highlighter','airbrush','eyedropper','smudge'].map(name=>tools.querySelector('[data-tool="'+name+'"]'))])button.addEventListener('click',close);
- window.addEventListener('farmsie-insert-ended',()=>notice.hidden=true);
- window.addEventListener('farmsie-transform-status',e=>{message.textContent=e.detail+' ';notice.hidden=false;});
- const transform=tools.querySelector('[data-tool="transform"]');transform.addEventListener('click',close);
- document.getElementById('farmsie-export-controls').addEventListener('click',()=>window.farmsieApplyTransform(),true);
- function prepare(text,sticker=false){
-  const ok=window.farmsiePrepareInsert({text,sticker,size:document.getElementById('farmsie-insert-size').value,
-   color:document.getElementById('farmsie-text-color').value,font:document.getElementById('farmsie-text-font').value});
-  if(ok){document.activeElement?.blur();close();notice.hidden=false;}
-  else document.getElementById('farmsie-add-help').textContent='Enter some text and wait for the picture to load.';
- }
- document.getElementById('farmsie-place-text').onclick=()=>prepare(document.getElementById('farmsie-add-text').value);
- for(const [emoji,name] of [['❤️','Heart'],['⭐','Star'],['🌈','Rainbow'],['🌸','Flower'],['🦋','Butterfly'],['🐱','Cat'],['🐶','Dog'],['🎨','Palette'],['🎉','Celebration'],['☀️','Sun'],['🌙','Moon'],['✨','Sparkles']]){
-  const b=document.createElement('button');b.type='button';b.textContent=emoji;b.setAttribute('aria-label',name+' sticker');b.onclick=()=>prepare(emoji,true);document.getElementById('farmsie-stickers').append(b);
- }
  window.dispatchEvent(new Event('resize'));
 })();
 </script>
@@ -3351,39 +3269,7 @@ body:has(#farmsie-menu:not([hidden])) #farmsie-layers-button,body:has(#farmsie-m
 </style>
 <script>
 (() => {
- const button=document.createElement('button');button.id='farmsie-layers-button';button.textContent='▱ Layers';button.type='button';button.setAttribute('aria-expanded','false');button.setAttribute('aria-controls','farmsie-layers-panel');
- const panel=document.createElement('section');panel.id='farmsie-layers-panel';panel.hidden=true;panel.setAttribute('aria-label','Picture layers');
- panel.innerHTML='<h2>Layers</h2><button type="button" id="farmsie-close-layers">Close</button><button type="button" id="farmsie-add-layer">+ New layer</button><button type="button" id="farmsie-copy-base">Copy original</button><p>Top layers appear above lower layers. Select a layer to paint, erase, smudge or transform it. Text and stickers each get their own layer.</p><div id="farmsie-layer-list"></div><p>🔒 Original picture — always kept underneath</p>';
- document.body.append(button,panel);
- function close(){panel.hidden=true;button.setAttribute('aria-expanded','false');}
- button.onclick=()=>{panel.hidden=!panel.hidden;button.setAttribute('aria-expanded',String(!panel.hidden));if(!panel.hidden)document.querySelectorAll('#farmsie-tools details').forEach(d=>d.open=false);render();};
- panel.querySelector('#farmsie-close-layers').onclick=close;
- panel.querySelector('#farmsie-add-layer').onclick=()=>window.farmsieLayerAction('add');
- panel.querySelector('#farmsie-copy-base').onclick=()=>window.farmsieLayerAction('copy-base');
- function render(){
-  const info=window.farmsieLayerInfo?.(),list=panel.querySelector('#farmsie-layer-list');list.replaceChildren();
-  button.textContent='▱ Layers'+(info?' · '+info.layers.length:'');
-  if(!info){list.textContent='Open a picture to use layers.';return;}
-  [...info.layers].reverse().forEach((l,index)=>{
-    const row=document.createElement('div');row.className='layer-row'+(l.id===info.activeId?' selected':'');
-    function action(label,fn){const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=fn;row.append(b);return b;}
-    const select=action((l.id===info.activeId?'✓ ':'')+l.name,()=>window.farmsieLayerAction('select',l.id));select.className='layer-name';select.setAttribute('aria-pressed',String(l.id===info.activeId));
-    action(l.visible?'👁 Visible':'Hidden',()=>window.farmsieLayerAction('visible',l.id));
-    action('↑',()=>window.farmsieLayerAction('up',l.id)).disabled=index===0;
-    action('↓',()=>window.farmsieLayerAction('down',l.id)).disabled=index===info.layers.length-1;
-    action('Rename',()=>{const name=prompt('Layer name',l.name);if(name!==null)window.farmsieLayerAction('rename',l.id,name);});
-    action('Duplicate',()=>window.farmsieLayerAction('duplicate',l.id));
-    action('Delete',()=>{if(confirm('Delete layer “'+l.name+'”? You can Undo this change.'))window.farmsieLayerAction('delete',l.id);});
-    const label=document.createElement('label');label.textContent='Opacity '+Math.round(l.opacity*100)+'%';
-    const range=document.createElement('input');range.type='range';range.min=0;range.max=100;range.value=Math.round(l.opacity*100);range.setAttribute('aria-label',l.name+' opacity');range.onchange=()=>window.farmsieLayerAction('opacity',l.id,range.value/100);label.append(range);row.append(label);list.append(row);
-  });
- }
- window.addEventListener('farmsie-layers-updated',render);
- document.getElementById('canvas-container').addEventListener('pointerdown',close,true);
- document.getElementById('farmsie-tools').addEventListener('pointerdown',close,true);
- document.addEventListener('keydown',e=>{if(e.key==='Escape')close();});
  const status=document.createElement('div');status.id='farmsie-global-status';status.hidden=true;status.setAttribute('role','alert');document.body.append(status);
  window.addEventListener('farmsie-save-error',e=>{status.textContent=e.detail+' Tap to dismiss.';status.hidden=false;});status.onclick=()=>status.hidden=true;
- render();
 })();
 </script>
