@@ -363,11 +363,11 @@ data-color="rgba(93,64,55,255)">
             2: "page2.png.png",
             3: "page3.png.png",
             4: "page4.png.png",
-            24: "images/jesus_mary_at_cross.png",
-            25: "images/three_crosses_calvary.png",
-            26: "images/jesus_praying.png",
-            27: "images/jesus_carries_cross.png",
-            28: "images/saint_michael_archangel.png",
+            24: "jesus_mary_at_cross.png",
+            25: "three_crosses_calvary.png",
+            26: "jesus_praying.png",
+            27: "jesus_carries_cross.png",
+            28: "saint_michael_archangel.png",
         };
         const pageDetails = {"1": {"name": "Life of Jesus — Picture 1", "tags": "jesus bible faith scripture"}, "2": {"name": "Life of Jesus — Picture 2", "tags": "jesus bible faith scripture"}, "3": {"name": "Life of Jesus — Picture 3", "tags": "jesus bible faith scripture"}, "4": {"name": "Life of Jesus — Picture 4", "tags": "jesus bible faith scripture"}, "24": {"name": "Mary at the Foot of the Cross", "tags": "virgin mary jesus crucifixion mother sorrow calvary"}, "25": {"name": "The Three Crosses at Calvary", "tags": "jesus crucifixion golgotha thieves three crosses"}, "26": {"name": "Jesus Prays", "tags": "jesus prayer kneeling jerusalem"}, "27": {"name": "Jesus Carries the Cross", "tags": "jesus passion via dolorosa cross"}, "28": {"name": "Saint Michael the Archangel", "tags": "michael archangel angels sword shield spiritual battle"}};
         let selectedColor = [255, 59, 48, 255];
@@ -439,7 +439,7 @@ data-color="rgba(93,64,55,255)">
 
         function progressKey(pageNumber) {
             // Changing an image filename starts fresh progress for that image.
-            return pageDetails[pageNumber]?.importId ? `import|${pageDetails[pageNumber].importId}` : `${pageNumber}|${pageImages[pageNumber]}`;
+            return pageDetails[pageNumber]?.importId ? `import|${pageDetails[pageNumber].importId}` : `${pageNumber}|${Number(pageNumber)>=24 ? 'images/'+pageImages[pageNumber] : pageImages[pageNumber]}`;
         }
 
         function openProgressDB() {
@@ -1353,6 +1353,8 @@ data-color="rgba(93,64,55,255)">
 
         if (image) {
             const picture = document.createElement('img');
+            picture.loading = 'lazy';
+            picture.decoding = 'async';
             picture.src = image;
             picture.alt = title;
             card.appendChild(picture);
