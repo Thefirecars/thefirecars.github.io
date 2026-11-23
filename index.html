@@ -286,7 +286,49 @@ body > footer .action-btn {flex:1 1 40%!important;width:auto!important;min-heigh
 body #palette-container {bottom:126px;}
 body #farmsie-tools {bottom:202px;}
 body #canvas-container {bottom:260px;}
-</style></head>
+</style>
+<style id="sacred-grace-devotions-style">
+/* Accessible, compact devotional card: no external fonts or images needed. */
+#farmsie-menu .sg-devotions {
+  grid-column:1/-1; min-width:0; width:100%; box-sizing:border-box;
+  padding:22px 18px; margin:0 0 6px;
+  text-align:left; background:linear-gradient(145deg,#fffdf8,#f3e9db);
+  border:1px solid #d8b98c; border-radius:18px;
+  box-shadow:0 5px 18px rgba(67,50,39,.1);
+  color:#322a30;
+}
+#farmsie-menu .sg-devotions * {box-sizing:border-box;}
+#farmsie-menu .sg-devotions .sg-kicker {
+  margin:0 0 5px; color:#805d3d!important; font:700 11px/1.4 system-ui,sans-serif;
+  text-transform:uppercase;letter-spacing:2px;text-shadow:none;-webkit-text-stroke:0;
+}
+#farmsie-menu .sg-devotions h3 {margin:0 0 5px;font:700 clamp(23px,5.5vw,30px)/1.25 Georgia,serif;color:#412f38!important;}
+#farmsie-menu .sg-devotions .sg-intro {margin:0 0 17px!important;font:15px/1.45 system-ui,sans-serif;color:#64544d!important;}
+#farmsie-menu .sg-prayer-tabs {display:flex;gap:7px;overflow-x:auto;padding:0 1px 9px;margin-bottom:12px;scrollbar-width:thin;}
+#farmsie-menu .sg-prayer-tabs button {
+  flex:0 0 auto;min-height:42px; padding:9px 12px!important;
+  background:white!important;color:#483b41!important;border:1px solid #ddcdb7!important;
+  border-radius:999px!important;font:600 13px/1.2 system-ui,sans-serif!important;
+  -webkit-text-stroke:0!important;text-shadow:none!important;
+  cursor:pointer;white-space:nowrap;
+}
+#farmsie-menu .sg-prayer-tabs button[aria-pressed="true"] {background:#453740!important;color:#fffaf2!important;border-color:#453740!important;}
+#farmsie-menu .sg-prayer-tabs button:focus-visible, #farmsie-menu .sg-copy-prayer:focus-visible {outline:3px solid #b18547;outline-offset:3px;}
+#farmsie-menu .sg-prayer-body {padding:17px 16px;border-radius:13px;background:#fffefa;border:1px solid #e9dcc7;}
+#farmsie-menu .sg-prayer-date {color:#88694b!important;font:600 12px/1.5 system-ui,sans-serif!important;letter-spacing:.3px;margin:0 0 6px!important;}
+#farmsie-menu .sg-prayer-body h4 {color:#392c35;margin:0 0 11px;font:700 22px/1.25 Georgia,serif;}
+#farmsie-menu .sg-prayer-text {color:#393036!important;font:17px/1.7 Georgia,serif!important;white-space:pre-line;margin:0 0 15px!important;}
+#farmsie-menu .sg-scripture {padding:12px 14px;border-left:3px solid #b18a53;background:#f8f2e8;border-radius:0 8px 8px 0;}
+#farmsie-menu .sg-scripture .sg-verse {font:italic 16px/1.55 Georgia,serif!important;color:#41373a!important;margin:0 0 6px!important;}
+#farmsie-menu .sg-scripture .sg-reference {font:600 12px/1.4 system-ui,sans-serif!important;color:#735638!important;margin:0!important;}
+#farmsie-menu .sg-reflection {margin:13px 0 0!important;font:14px/1.55 system-ui,sans-serif!important;color:#5b5050!important;}
+#farmsie-menu .sg-prayer-actions {display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:13px;}
+#farmsie-menu .sg-copy-prayer {background:#453740!important;color:#fffaf2!important;border:0!important;border-radius:9px!important;padding:12px 16px!important;font:600 14px system-ui,sans-serif!important;text-shadow:none!important;-webkit-text-stroke:0!important;cursor:pointer;}
+#farmsie-menu .sg-copy-status {font:13px/1.4 system-ui,sans-serif;color:#5c4c43;}
+#farmsie-menu .sg-prayer-source {margin:13px 0 0!important;font:12px/1.5 system-ui,sans-serif!important;color:#75665c!important;}
+@media(max-width:400px) {#farmsie-menu .sg-devotions {padding:17px 12px;}#farmsie-menu .sg-prayer-body {padding:14px 12px;}}
+</style>
+</head>
 <body>
     <header>
         <button class="nav-btn" onclick="changePage(-1)">◀ Prev</button>
@@ -1375,6 +1417,76 @@ data-color="rgba(93,64,55,255)">
         grid.appendChild(card);
     }
 
+
+// A self-contained daily devotional. All content is on-device; no sign-in, API, or tracking.
+function createPrayerPanel() {
+    const daily = [
+      {title:"Prayer for Stillness", prayer:"Heavenly Father, quiet the noise around me and within me. Help me recognize Your presence and receive this day with a peaceful heart. Amen.", verse:"Be still, and know that I am God.", reference:"Psalm 46:10", reflect:"Where can I make a little room for silence today?"},
+      {title:"Prayer for Rest", prayer:"Lord Jesus, when I feel tired or burdened, remind me that I do not have to carry everything alone. Help me rest and find strength for the next step. Amen.", verse:"Come unto me, all ye that labour and are heavy laden, and I will give you rest.", reference:"Matthew 11:28", reflect:"What burden can I bring to God today?"},
+      {title:"Prayer for Help", prayer:"Loving God, guide my decisions and steady my heart when the path is uncertain. Help me ask for wisdom, accept help, and move forward with hope. Amen.", verse:"My help cometh from the LORD, which made heaven and earth.", reference:"Psalm 121:2", reflect:"Where do I need guidance today?"},
+      {title:"Prayer for Courage", prayer:"Heavenly Father, give me courage when I am afraid and kindness when I am frustrated. Help me remember that I can face today one moment at a time. Amen.", verse:"Fear thou not; for I am with thee.", reference:"Isaiah 41:10", reflect:"What small, brave action can I take today?"},
+      {title:"Prayer for Trust", prayer:"Good Shepherd, help me trust Your care even when I cannot see the road ahead. Teach me to be patient, grateful, and attentive to others. Amen.", verse:"The LORD is my shepherd; I shall not want.", reference:"Psalm 23:1", reflect:"What am I thankful for right now?"},
+      {title:"Prayer for a Faithful Heart", prayer:"Lord, teach me to turn to You in ordinary moments, not only when life becomes difficult. Let my words and actions reflect patience, compassion, and gratitude. Amen.", verse:"Pray without ceasing.", reference:"1 Thessalonians 5:17", reflect:"When could I pause for a short prayer today?"},
+      {title:"Prayer for Peace", prayer:"Lord Jesus, bring peace to my thoughts, to my home, and to anyone who is struggling. Help me carry that peace into the way I speak and act. Amen.", verse:"Peace I leave with you, my peace I give unto you.", reference:"John 14:27", reflect:"How can I offer peace to another person?"}
+    ];
+    const options = {
+      today:null,
+      morning:{title:"Morning Prayer",prayer:"Lord, thank You for a new morning. Guide my thoughts, words, and actions today. Help me notice those who need kindness and face each task with patience. Amen.",verse:"Cause me to hear thy lovingkindness in the morning; for in thee do I trust.",reference:"Psalm 143:8",reflect:"What good intention will guide my day?"},
+      evening:{title:"Evening Prayer",prayer:"Heavenly Father, thank You for carrying me through this day. Forgive my mistakes, comfort those who are hurting, and give me quiet rest tonight. Amen.",verse:"I will both lay me down in peace, and sleep: for thou, LORD, only makest me dwell in safety.",reference:"Psalm 4:8",reflect:"What moment from today deserves gratitude?"},
+      peace:{title:"Prayer for Peace",prayer:"Lord Jesus, calm my anxious thoughts and soften my heart. Help me respond to others with gentleness and seek reconciliation where I can. Amen.",verse:"Peace I leave with you, my peace I give unto you.",reference:"John 14:27",reflect:"Where can I practice patience today?"},
+      father:{title:"The Our Father",prayer:"Our Father, who art in heaven, hallowed be thy name. Thy kingdom come, thy will be done on earth as it is in heaven. Give us this day our daily bread, and forgive us our trespasses, as we forgive those who trespass against us. And lead us not into temptation, but deliver us from evil. Amen.",verse:"After this manner therefore pray ye: Our Father which art in heaven, Hallowed be thy name.",reference:"Matthew 6:9",reflect:"What does forgiveness mean to me today?"},
+      mary:{title:"Hail Mary",prayer:"Hail Mary, full of grace, the Lord is with thee. Blessed art thou among women, and blessed is the fruit of thy womb, Jesus. Holy Mary, Mother of God, pray for us sinners, now and at the hour of our death. Amen.",verse:"Hail, thou that art highly favoured, the Lord is with thee: blessed art thou among women.",reference:"Luke 1:28",reflect:"How can I respond to others with humility?"},
+      michael:{title:"Prayer to Saint Michael",prayer:"Saint Michael the Archangel, defend us in battle. Be our protection against the wickedness and snares of the devil. May God rebuke him, we humbly pray; and do thou, O Prince of the heavenly host, by the power of God, thrust into hell Satan and all the evil spirits who prowl about the world seeking the ruin of souls. Amen.",verse:"And there was war in heaven: Michael and his angels fought against the dragon.",reference:"Revelation 12:7",reflect:"How can I stand up for what is good today?"}
+    };
+    const today = new Date();
+    const day = Math.floor(Date.UTC(today.getFullYear(),today.getMonth(),today.getDate()) / 86400000);
+    options.today = daily[((day % daily.length) + daily.length) % daily.length];
+    const section=document.createElement('section');
+    section.className='sg-devotions';
+    section.setAttribute('aria-label','Daily Prayers and Scripture');
+    const kicker=document.createElement('p');kicker.className='sg-kicker';kicker.textContent='✝ A MOMENT OF REFLECTION';
+    const heading=document.createElement('h3');heading.textContent='Daily Prayers & Scripture';
+    const intro=document.createElement('p');intro.className='sg-intro';intro.textContent='Pause, pray, and reflect before you color.';
+    const tabs=document.createElement('div');tabs.className='sg-prayer-tabs';tabs.setAttribute('role','group');tabs.setAttribute('aria-label','Select a prayer');
+    const content=document.createElement('article');content.className='sg-prayer-body';content.setAttribute('aria-live','polite');
+    const date=document.createElement('p');date.className='sg-prayer-date';
+    const title=document.createElement('h4');
+    const prayer=document.createElement('p');prayer.className='sg-prayer-text';
+    const scripture=document.createElement('div');scripture.className='sg-scripture';
+    const verse=document.createElement('p');verse.className='sg-verse';
+    const reference=document.createElement('p');reference.className='sg-reference';
+    const reflection=document.createElement('p');reflection.className='sg-reflection';
+    scripture.append(verse,reference);content.append(date,title,prayer,scripture,reflection);
+    const actions=document.createElement('div');actions.className='sg-prayer-actions';
+    const copy=document.createElement('button');copy.type='button';copy.className='sg-copy-prayer';copy.textContent='Copy prayer';
+    const status=document.createElement('span');status.className='sg-copy-status';status.setAttribute('role','status');actions.append(copy,status);
+    const source=document.createElement('p');source.className='sg-prayer-source';source.textContent='Scripture excerpts: King James Version (public domain).';
+    section.append(kicker,heading,intro,tabs,content,actions,source);
+    let selected='today';
+    const buttons=[];
+    for(const [key,label] of [['today','Today'],['morning','Morning'],['evening','Evening'],['peace','Peace'],['father','Our Father'],['mary','Hail Mary'],['michael','St. Michael']]) {
+      const button=document.createElement('button');button.type='button';button.textContent=label;
+      button.addEventListener('click',()=>show(key));tabs.appendChild(button);buttons.push({key,button});
+    }
+    function show(key) {
+      selected=key;const item=options[key];
+      date.textContent=key==='today' ? new Intl.DateTimeFormat(undefined,{weekday:'long',month:'long',day:'numeric'}).format(today) : 'Prayer & reflection';
+      title.textContent=item.title;prayer.textContent=item.prayer;
+      verse.textContent='“'+item.verse+'”';reference.textContent=item.reference;
+      reflection.textContent='Reflect: '+item.reflect;
+      status.textContent='';
+      buttons.forEach(({key:k,button})=>button.setAttribute('aria-pressed',String(k===key)));
+    }
+    copy.addEventListener('click',async()=>{
+      const item=options[selected];const text=item.title+'\n\n'+item.prayer+'\n\n'+item.verse+' — '+item.reference;
+      try {
+        if(!navigator.clipboard?.writeText)throw new Error('Clipboard unavailable');
+        await navigator.clipboard.writeText(text);status.textContent='Copied!';
+      }catch(error){status.textContent='Copy unavailable in this browser. You can select the prayer text instead.';}
+    });
+    show('today');return section;
+}
+
 function showCategories() {
     prepareScreen(
         'Sacred Grace Coloring',
@@ -1391,6 +1503,7 @@ function showCategories() {
     wordSearch.className = 'sacred-word-search';
     wordSearch.innerHTML = '🔎 Word Search <span>Enjoy a word puzzle • Play →</span>';
     grid.appendChild(wordSearch);
+    grid.appendChild(createPrayerPanel());
 
     const billboard = document.createElement('section');
     billboard.className = 'farmsie-billboard';
