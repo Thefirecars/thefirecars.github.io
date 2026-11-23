@@ -290,7 +290,7 @@ body #canvas-container {bottom:260px;}
 <body>
     <header>
         <button class="nav-btn" onclick="changePage(-1)">◀ Prev</button>
-        <h1 id="page-title">Page 1 of 4</h1>
+        <h1 id="page-title">Mary at the Foot of the Cross • 1/5</h1>
         <button class="nav-btn" onclick="changePage(1)">Next ▶</button>
     </header>
 
@@ -356,20 +356,17 @@ data-color="rgba(93,64,55,255)">
         const canvas = document.getElementById('coloring-canvas');
         const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
+        // Keep original IDs 24–28 so previously saved coloring remains accessible.
         let currentPage = 24;
-        let totalPages = 9;
+        let totalPages = 5;
         const pageImages = {
-            1: "page1.png.png",
-            2: "page2.png.png",
-            3: "page3.png.png",
-            4: "page4.png.png",
             24: "jesus_mary_at_cross.png",
             25: "three_crosses_calvary.png",
             26: "jesus_praying.png",
             27: "jesus_carries_cross.png",
             28: "saint_michael_archangel.png",
         };
-        const pageDetails = {"1": {"name": "Life of Jesus — Picture 1", "tags": "jesus bible faith scripture"}, "2": {"name": "Life of Jesus — Picture 2", "tags": "jesus bible faith scripture"}, "3": {"name": "Life of Jesus — Picture 3", "tags": "jesus bible faith scripture"}, "4": {"name": "Life of Jesus — Picture 4", "tags": "jesus bible faith scripture"}, "24": {"name": "Mary at the Foot of the Cross", "tags": "virgin mary jesus crucifixion mother sorrow calvary"}, "25": {"name": "The Three Crosses at Calvary", "tags": "jesus crucifixion golgotha thieves three crosses"}, "26": {"name": "Jesus Prays", "tags": "jesus prayer kneeling jerusalem"}, "27": {"name": "Jesus Carries the Cross", "tags": "jesus passion via dolorosa cross"}, "28": {"name": "Saint Michael the Archangel", "tags": "michael archangel angels sword shield spiritual battle"}};
+        const pageDetails = {"24": {"name": "Mary at the Foot of the Cross", "tags": "virgin mary jesus crucifixion mother sorrow calvary"}, "25": {"name": "The Three Crosses at Calvary", "tags": "jesus crucifixion golgotha thieves three crosses"}, "26": {"name": "Jesus Prays", "tags": "jesus prayer kneeling jerusalem"}, "27": {"name": "Jesus Carries the Cross", "tags": "jesus passion via dolorosa cross"}, "28": {"name": "Saint Michael the Archangel", "tags": "michael archangel angels sword shield spiritual battle"}};
         let selectedColor = [255, 59, 48, 255];
         const baseImage = new Image();
         let boundaryMask = null;
@@ -1322,15 +1319,15 @@ data-color="rgba(93,64,55,255)">
     const back = oldBack.cloneNode(true);
     oldBack.replaceWith(back);
 
-    // Only biblical coloring collections are shown. Existing page IDs 1–4
-    // are deliberately retained to preserve saved artwork keys.
+    // Only the five scriptural scenes are listed. Historical pages 1–4 are
+    // hidden, not deleted from a visitor's IndexedDB saved progress.
     const categories = [
         { id: 'jesus', name: '✝ Life of Jesus' },
         { id: 'mary', name: '🕊 Virgin Mary' },
         { id: 'angels', name: '✨ Angels & Archangels' }
     ];
     const books = [
-        { title: 'Life of Jesus', category: 'jesus', pages: [1, 2, 3, 4, 25, 26, 27] },
+        { title: 'Life of Jesus', category: 'jesus', pages: [25, 26, 27] },
         { title: 'Mary & the Passion', category: 'mary', pages: [24] },
         { title: 'Heavenly Angels', category: 'angels', pages: [28] }
     ];
